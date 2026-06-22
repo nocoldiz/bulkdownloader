@@ -17,7 +17,7 @@ a = Analysis(
     pathex=['src'],
     binaries=[],
     datas=[('src/bulkdownloader.py', '.'), ('src/site_search.py', '.'),
-           ('src/websites.json', '.'), ('src/categories.json', '.')],
+           ('assets/websites.json', '.'), ('assets/categories.json', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

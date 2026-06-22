@@ -32,6 +32,9 @@ APP_DIR = Path(__file__).resolve().parent
 # Runtime files live in the project root — the folder above src/ when running
 # from source, otherwise next to this module (frozen builds set $BULK_DB_FILE).
 DATA_DIR = APP_DIR.parent if APP_DIR.name == 'src' else APP_DIR
+# App-managed state (the db) is kept in a config/ subfolder; the GUI overrides
+# this with $BULK_DB_FILE so both processes always agree on the exact file.
+CONFIG_DIR = DATA_DIR / 'config'
 
 # Query params that are pure tracking noise — stripped only for the de-dup key,
 # never from the URL we actually download.
@@ -52,7 +55,7 @@ ST_STOPPED = 'stopped'
 def db_path():
     """Location of the shared db.json — override with $BULK_DB_FILE."""
     env = os.environ.get('BULK_DB_FILE', '').strip()
-    return Path(env) if env else (DATA_DIR / 'db.json')
+    return Path(env) if env else (CONFIG_DIR / 'db.json')
 
 
 def is_http(url):

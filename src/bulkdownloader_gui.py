@@ -60,6 +60,10 @@ FROZEN = getattr(sys, 'frozen', False)
 APP_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
 BUNDLE_DIR = Path(getattr(sys, '_MEIPASS', APP_DIR))
 
+# Seed data (site registry + category map) ships in assets/ alongside src/ when
+# running from source; a frozen build bundles it into BUNDLE_DIR (datas dest '.').
+ASSETS_DIR = (APP_DIR.parent / 'assets') if (not FROZEN and APP_DIR.name == 'src') else BUNDLE_DIR
+
 # Shared queue/bookmarks database — the single source of truth used by BOTH this
 # GUI and the console (bulkdownloader.py). Imported from the script/bundle dir.
 for _p in (str(APP_DIR), str(BUNDLE_DIR)):
@@ -108,38 +112,67 @@ try:
 except OSError:
     DATA_DIR = APP_DIR
 
+# App-managed state (db, config, login cookies + profile, site registry) lives in
+# a config/ subfolder to keep the project root clean. The user-facing links_*.txt
+# queue files and the downloads/ folder stay in the root.
+CONFIG_DIR = DATA_DIR / 'config'
+try:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    CONFIG_DIR = DATA_DIR
+
+
+def _migrate_root_to_config():
+    """One-time move of pre-existing state files from the root into config/, so
+    upgrading users keep their db, settings and saved login."""
+    if CONFIG_DIR == DATA_DIR:
+        return
+    for name in ('db.json', 'queue_db.json', 'gui_config.json', 'cookies.txt',
+                 'websites.json', 'categories.json', 'x_browser_profile'):
+        legacy, dest = DATA_DIR / name, CONFIG_DIR / name
+        if legacy.exists() and not dest.exists():
+            try:
+                shutil.move(str(legacy), str(dest))
+            except OSError:
+                pass
+
+
+_migrate_root_to_config()
+
 # Downloads land in a plain ./downloads folder next to the app (not videos/downloads).
 DEFAULT_OUT_DIR = DATA_DIR / 'downloads'
 _LEGACY_OUT_DIR = PROJECT_ROOT / 'videos' / 'downloads'
 
+# Queue input/history files — kept in the root (an *input* the user can edit).
 LINKS_TO_DOWNLOAD = DATA_DIR / 'links_to_download.txt'
 LINKS_DOWNLOADED = DATA_DIR / 'links_downloaded.txt'
 LINKS_FAILED = DATA_DIR / 'link_failed.txt'
-CONFIG_FILE = DATA_DIR / 'gui_config.json'
+
+CONFIG_FILE = CONFIG_DIR / 'gui_config.json'
 
 # Single source of truth for the queue + downloaded registry + bookmarks — the
 # unified db.json shared with the console. links_*.txt are now an *import* source
 # only (fed into the queue, never emptied). OLD_DB_FILE is the pre-unification
 # file, migrated once into db.json. The env var makes child bulkdownloader.py
 # subprocesses read/write the very same file.
-DB_FILE = DATA_DIR / 'db.json'
+DB_FILE = CONFIG_DIR / 'db.json'
 os.environ.setdefault('BULK_DB_FILE', str(DB_FILE))
-OLD_DB_FILE = DATA_DIR / 'queue_db.json'
+OLD_DB_FILE = CONFIG_DIR / 'queue_db.json'
 
 # Website registry — the same shape AphroArchive exports via
-# GET /api/db/websites/export. Kept in DATA_DIR so favourites persist.
-WEBSITES_JSON = DATA_DIR / 'websites.json'
+# GET /api/db/websites/export. Kept in config/ so favourites persist.
+WEBSITES_JSON = CONFIG_DIR / 'websites.json'
 
 # Merged category → tags map (joined from every preset) powering the gallery's
 # tag sidebar (title-keyword matching).
-CATEGORIES_JSON = DATA_DIR / 'categories.json'
+CATEGORIES_JSON = CONFIG_DIR / 'categories.json'
 
 # Netscape-format cookies for login-gated sites (X.com sensitive/age-gated tweets).
-COOKIES_FILE = DATA_DIR / 'cookies.txt'
+COOKIES_FILE = CONFIG_DIR / 'cookies.txt'
 
 # Persistent Chromium profile for the built-in X.com browser — keeps the login
 # between runs so likes / bookmarks / following can be scraped on demand.
-X_PROFILE_DIR = DATA_DIR / 'x_browser_profile'
+X_PROFILE_DIR = CONFIG_DIR / 'x_browser_profile'
 
 # Cache dir for the gallery's ffmpeg-generated thumbnails.
 THUMB_CACHE_DIR = Path(tempfile.gettempdir()) / 'aphro_gallery_thumbs'
@@ -248,7 +281,7 @@ def _seed_bundled(dest):
     once — frozen builds and first runs — so it's editable and always present."""
     if dest.exists():
         return
-    for src in (BUNDLE_DIR / dest.name, APP_DIR / dest.name):
+    for src in (ASSETS_DIR / dest.name, BUNDLE_DIR / dest.name, APP_DIR / dest.name):
         try:
             if src.exists() and src.resolve() != dest.resolve():
                 shutil.copyfile(src, dest)
@@ -322,7 +355,7 @@ def _load_config():
 # ── website registry (raw JSON, so favourites + all fields round-trip) ──
 
 def _load_websites_raw():
-    for path in (WEBSITES_JSON, APP_DIR / 'websites.json', BUNDLE_DIR / 'websites.json'):
+    for path in (WEBSITES_JSON, ASSETS_DIR / 'websites.json', BUNDLE_DIR / 'websites.json'):
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
             if isinstance(data, list):
@@ -342,7 +375,7 @@ def _save_websites_raw(sites):
 
 def _load_categories():
     """The merged {category: {displayName, tags[]}} map for the gallery sidebar."""
-    for path in (CATEGORIES_JSON, APP_DIR / 'categories.json', BUNDLE_DIR / 'categories.json'):
+    for path in (CATEGORIES_JSON, ASSETS_DIR / 'categories.json', BUNDLE_DIR / 'categories.json'):
         try:
             data = json.loads(path.read_text(encoding='utf-8'))
             if isinstance(data, dict):

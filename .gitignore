@@ -1,25 +1,15 @@
-# ─── Private / sensitive data ──────────────────────────────────────────
-# Logged-in browser session for the X.com tab — contains your auth cookies.
-x_browser_profile/
-# Exported session cookies used by yt-dlp to fetch gated videos.
-cookies.txt
+# ─── App state / config (private) ──────────────────────────────────────
+# All app-managed state lives here: the db, GUI config, exported login cookies,
+# the persistent X.com browser profile, and runtime copies of the site registry
+# (the pristine seeds are tracked in assets/). Everything here is per-user.
+config/
 *.cookies
-# Per-user GUI config (window geometry, personal output folder, etc.).
-gui_config.json
 
-# ─── Generated runtime state ───────────────────────────────────────────
-# Unified link database shared by the GUI and the console.
-db.json
-queue_db.json
-# Download queue / history / failures (regenerated from db.json).
+# ─── Generated runtime state (root) ────────────────────────────────────
+# Download queue / history / failures — kept in the root as an editable input.
 links_to_download.txt
 links_downloaded.txt
 link_failed.txt
-# Runtime copies of the site registry / category map. The pristine seeds are
-# tracked in src/; these root copies are written back at runtime (favourites,
-# edits) and seeded from src/ on first launch.
-/websites.json
-/categories.json
 
 # ─── Downloaded content ────────────────────────────────────────────────
 videos/

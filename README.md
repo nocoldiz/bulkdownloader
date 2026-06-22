@@ -33,13 +33,14 @@ de-duplicate identically no matter how they were added.
 
 ```
 .
-├── src/                      # application source
+├── src/                      # application source (Python only)
 │   ├── bulkdownloader_gui.py # tabbed Tkinter GUI / download manager (entry point)
 │   ├── bulkdownloader.py     # CLI downloader + the per-URL worker the GUI spawns
 │   ├── bulk_db.py            # shared db.json: queue, downloaded registry, bookmarks
-│   ├── site_search.py        # website registry + multi-site search/scraper
-│   ├── websites.json         # seed site registry (copied to root on first run)
-│   └── categories.json       # seed category → tags map
+│   └── site_search.py        # website registry + multi-site search/scraper
+├── assets/                   # seed data (tracked; copied into config/ on first run)
+│   ├── websites.json         # site registry
+│   └── categories.json       # category → tags map
 ├── install.sh / install.bat  # one-time dependency installer
 ├── launch.sh  / launch.bat   # run the GUI from source
 ├── build.sh   / build.bat    # package a standalone binary with PyInstaller
@@ -48,13 +49,16 @@ de-duplicate identically no matter how they were added.
 └── index.html                # standalone web front-end (optional)
 ```
 
-Only the Python source lives in `src/`; the launchers, installers and build scripts
-sit in the project root and build into `./dist/` (git-ignored).
+Code lives in `src/`, shipped seed data in `assets/`; the launchers, installers and
+build scripts sit in the project root and build into `./dist/` (git-ignored).
 
-Runtime files are written to the **project root** (not into `src/`) and are git-ignored:
-`db.json`, `links_to_download.txt`, `links_downloaded.txt`, `link_failed.txt`,
-`gui_config.json`, `cookies.txt`, `x_browser_profile/`, `downloads/`, and the working
-copies of `websites.json` / `categories.json` (seeded from `src/` on first launch).
+Runtime files (all git-ignored) are split by purpose:
+
+- **`config/`** — app-managed state: `db.json`, `gui_config.json`, `cookies.txt`, the
+  `x_browser_profile/` X.com login, and the working `websites.json` / `categories.json`
+  (seeded from `assets/` on first launch). Pre-existing root copies migrate here once.
+- **project root** — the editable queue files `links_to_download.txt`,
+  `links_downloaded.txt`, `link_failed.txt`, and the `downloads/` output folder.
 
 ---
 
@@ -123,5 +127,5 @@ per-OS application-data folder instead of next to the executable.
 ## Notes
 
 - `websites.json` and `categories.json` are mutated at runtime (favourites, edits). The
-  pristine seeds live in `src/`; the working copies in the project root are git-ignored.
+  pristine seeds live in `assets/`; the working copies in `config/` are git-ignored.
 - Only download content you have the right to. Respect each site's terms of service.

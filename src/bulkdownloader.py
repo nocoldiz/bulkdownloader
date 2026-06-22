@@ -36,10 +36,12 @@ try:
 except Exception:
     bulk_db = None
 
-# Where runtime files (links_*.txt, cookies.txt, db.json) live: the project root,
-# i.e. the folder above src/ when running from source, else next to this script.
+# Project root (the folder above src/ when running from source) holds the
+# user-facing links_*.txt files; app-managed state (db.json, cookies.txt, login
+# profile) lives in the config/ subfolder, shared with the GUI.
 SCRIPT_DIR = Path(__file__).resolve().parent
 DATA_DIR = SCRIPT_DIR.parent if SCRIPT_DIR.name == 'src' else SCRIPT_DIR
+CONFIG_DIR = DATA_DIR / 'config'
 
 
 # Browser impersonation via curl_cffi is now ENABLED BY DEFAULT for virtually
@@ -108,7 +110,8 @@ def _aggressive_cookie_dirs():
     """Common cross-platform folders where an exported cookies.txt might live."""
     home = Path.home()
     dirs = [
-        DATA_DIR,                          # project root (highest trust)
+        CONFIG_DIR,                        # config/ — where the GUI saves cookies (highest trust)
+        DATA_DIR,                          # project root
         Path.cwd(),
         home,
         home / 'Downloads', home / 'Desktop', home / 'Documents',
@@ -1491,7 +1494,8 @@ def setup_x_login():
     """Save a cookies.txt so yt-dlp can fetch login-gated / sensitive X.com (and
     other site) videos. The cookies are then reused automatically for every
     download — far more reliable than live browser-cookie extraction on Windows."""
-    dest = DATA_DIR / 'cookies.txt'
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    dest = CONFIG_DIR / 'cookies.txt'
 
     print('\nX.com / Twitter login (cookies) setup', flush=True)
     print('=' * 50, flush=True)
