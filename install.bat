@@ -1,6 +1,5 @@
 @echo off
-REM Run from the project root (this script lives in scripts\).
-cd /d "%~dp0.."
+cd /d "%~dp0"
 
 echo BulkDownloader - Dependency Installer
 echo ======================================
@@ -47,6 +46,6 @@ if errorlevel 1 (
 
 echo.
 echo ======================================
-echo Done. Run scripts\launch.bat to start BulkDownloader.
+echo Done. Run launch.bat to start BulkDownloader.
 echo ======================================
 pause

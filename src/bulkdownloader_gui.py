@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tabbed GUI download manager for bulkdownloader.py.
 
-Five tabs:
+Tabs:
 
 * **Downloads** — a download queue backed by ``links_to_download.txt``.
   The queue auto-loads from the txt files on launch (queued / done / failed),
@@ -25,6 +25,10 @@ Five tabs:
   profiles you follow, or any ``@handle``'s media straight into the queue, and the
   session is exported as cookies so yt-dlp can download the gated videos. An
   *Advanced* panel keeps the old cookies.txt / token fallbacks.
+* **X Links** — a dedicated list of every link scraped from the X.com session
+  (kept separate from browser Bookmarks). Filter, tick rows and queue them, or
+  download all pending at once with the saved X.com login; remove ones you don't
+  want.
 
 The window size, download folder, parallel count and last tab are remembered
 between runs. Files land in the chosen output folder — no categorization here.
@@ -694,6 +698,7 @@ class DownloadManager(tk.Tk):
         self.items = {}                  # iid -> {url, status, pct, file, title, speed, eta, error}
         self.downloaded = {}             # norm_key -> {url, file, ts}  (persistent registry)
         self.bookmarks = []              # saved video links (scraped from X, etc.)
+        self._x_scraped = []             # view rows for the X-session scraped-links tab
         self._migrated_count = 0
         self.out_queue = queue.Queue()   # worker/threads -> UI messages
 
@@ -841,6 +846,7 @@ class DownloadManager(tk.Tk):
         self.tab_gallery = ttk.Frame(self.nb)
         self.tab_duplicates = ttk.Frame(self.nb)
         self.tab_xlogin = ttk.Frame(self.nb)
+        self.tab_xscraped = ttk.Frame(self.nb)
 
         self.nb.add(self.tab_downloads, text='⬇ Downloads')
         self.nb.add(self.tab_errored, text='❌ Errored')
@@ -849,6 +855,7 @@ class DownloadManager(tk.Tk):
         self.nb.add(self.tab_gallery, text='🎬 Gallery')
         self.nb.add(self.tab_duplicates, text='🧬 Duplicates')
         self.nb.add(self.tab_xlogin, text='🔑 X.com')
+        self.nb.add(self.tab_xscraped, text='🐦 X Links')
 
         self._build_downloads_tab(self.tab_downloads)
         self._build_errored_tab(self.tab_errored)
@@ -857,6 +864,7 @@ class DownloadManager(tk.Tk):
         self._build_gallery_tab(self.tab_gallery)
         self._build_duplicates_tab(self.tab_duplicates)
         self._build_xlogin_tab(self.tab_xlogin)
+        self._build_xscraped_tab(self.tab_xscraped)
 
         self.nb.bind('<<NotebookTabChanged>>', self._on_tab_changed)
 
@@ -1073,6 +1081,9 @@ class DownloadManager(tk.Tk):
         # Auto-reload the saved bookmark DB into the Bookmarks tab on launch.
         if self.bookmarks and hasattr(self, 'bm_tree'):
             self._load_saved_bookmarks(announce=False)
+        # Populate the X-scraped links tab from the saved DB too.
+        if self.bookmarks and hasattr(self, 'xs_tree'):
+            self._load_xscraped(announce=False)
         if self._next_pending():
             extra = f' (+{len(fed)} from links_to_download.txt)' if fed else ''
             self.status_var.set(f'Queue loaded.{extra} Press Start to download.')
@@ -2084,6 +2095,181 @@ class DownloadManager(tk.Tk):
             messagebox.showinfo('Already queued', 'Those bookmarks are already in the queue.')
 
     # ════════════════════════════════════════════════════════════════
+    #  X Links tab — links scraped from your logged-in X.com session
+    # ════════════════════════════════════════════════════════════════
+    def _build_xscraped_tab(self, parent):
+        pad = {'padx': 12, 'pady': 6}
+
+        head = ttk.Frame(parent)
+        head.pack(fill='x', **pad)
+        ttk.Label(head, text='Links scraped from your X.com session', style='Header.TLabel').pack(anchor='w')
+        ttk.Label(head, text='Every video link pulled from the X.com tab (Likes, Bookmarks, followed media, '
+                             'profiles, page scrapes) collects here. Tick rows and queue them, or download '
+                             'all pending at once — they use your saved X.com login.',
+                  style='Sub.TLabel').pack(anchor='w')
+
+        bar = ttk.Frame(parent)
+        bar.pack(fill='x', **pad)
+        ttk.Button(bar, text='↻ Refresh', command=self._load_xscraped).pack(side='left')
+        ttk.Button(bar, text='⬇ Download all pending', style='Accent.TButton',
+                   command=self._download_xscraped_pending).pack(side='left', padx=6)
+        ttk.Button(bar, text='🗑 Remove selected', command=self._remove_xscraped).pack(side='left')
+        self.xs_count_var = tk.StringVar(value='')
+        ttk.Label(bar, textvariable=self.xs_count_var, style='Count.TLabel').pack(side='right')
+
+        filt = ttk.Frame(parent)
+        filt.pack(fill='x', **pad)
+        ttk.Label(filt, text='Filter:').pack(side='left')
+        self.xs_filter_var = tk.StringVar()
+        self.xs_filter_var.trace_add('write', lambda *_: self._refilter_xscraped())
+        ttk.Entry(filt, textvariable=self.xs_filter_var).pack(side='left', fill='x', expand=True, padx=6)
+        ttk.Button(filt, text='⤴ Add to top',
+                   command=lambda: self._add_xscraped_to_queue(at_top=True)).pack(side='left')
+        ttk.Button(filt, text='⤵ Add to bottom', style='Accent.TButton',
+                   command=lambda: self._add_xscraped_to_queue(at_top=False)).pack(side='left', padx=6)
+
+        list_panel = ttk.LabelFrame(parent, text='Scraped X links  ·  tick rows (or add all when none ticked)')
+        list_panel.pack(fill='both', expand=True, **pad)
+        list_inner = ttk.Frame(list_panel)
+        list_inner.pack(fill='both', expand=True, padx=8, pady=8)
+
+        self.xs_tree = ttk.Treeview(list_inner, columns=('chk', 'source', 'url'),
+                                    show='headings', selectmode='extended')
+        self.xs_tree.heading('source', text='From')
+        self.xs_tree.heading('url', text='URL')
+        self.xs_tree.column('chk', width=34, anchor='center', stretch=False)
+        self.xs_tree.column('source', width=150, stretch=False)
+        self.xs_tree.column('url', width=560, stretch=True)
+        xs_scroll = ttk.Scrollbar(list_inner, command=self.xs_tree.yview)
+        self.xs_tree.configure(yscrollcommand=xs_scroll.set)
+        self.xs_tree.pack(side='left', fill='both', expand=True)
+        xs_scroll.pack(side='right', fill='y')
+        self.xs_tree.tag_configure('downloaded', foreground=SUCCESS)
+        self._setup_checktree(self.xs_tree)
+        self.xs_tree.bind('<Double-1>', self._xs_open_link)
+        self.xs_tree.bind('<Button-3>', self._xs_popup_menu)
+        self.xs_tree.bind('<Button-2>', self._xs_popup_menu)
+
+        self.xs_ctx_menu = tk.Menu(self, tearoff=0)
+        self.xs_ctx_menu.add_command(label='🌐 Open link', command=self._xs_open_link)
+        self.xs_ctx_menu.add_separator()
+        self.xs_ctx_menu.add_command(label='⤴ Add to top', command=lambda: self._add_xscraped_to_queue(at_top=True))
+        self.xs_ctx_menu.add_command(label='⤵ Add to bottom', command=lambda: self._add_xscraped_to_queue(at_top=False))
+        self.xs_ctx_menu.add_command(label='🗑 Remove selected', command=self._remove_xscraped)
+
+    @staticmethod
+    def _is_x_source(source):
+        """True for bookmark records that came from the X.com scraper (source 'x:…')."""
+        return isinstance(source, str) and source.startswith('x:')
+
+    def _load_xscraped(self, announce=True):
+        """Rebuild the X-scraped view from the bookmark DB (source 'x:…' only),
+        newest first."""
+        rows = []
+        for bm in self.bookmarks:
+            if not self._is_x_source(bm.get('source')):
+                continue
+            url = bm.get('url', '')
+            if not _is_http(url):
+                continue
+            rows.append({'source': (bm.get('source') or 'x:')[2:] or 'X.com',
+                         'url': url, 'added_at': bm.get('added_at') or 0})
+        rows.sort(key=lambda r: r['added_at'], reverse=True)
+        self._x_scraped = rows
+        if hasattr(self, 'xs_tree'):
+            self._refilter_xscraped()
+        if announce:
+            self.status_var.set(f'{len(rows)} link(s) scraped from X.com.')
+
+    def _refilter_xscraped(self):
+        needle = self.xs_filter_var.get().strip().lower()
+        self.xs_tree._checked.clear()
+        for iid in self.xs_tree.get_children():
+            self.xs_tree.delete(iid)
+        shown = done = 0
+        for i, row in enumerate(self._x_scraped):
+            if needle and needle not in row['url'].lower() and needle not in row['source'].lower():
+                continue
+            is_dl = self._is_downloaded(row['url'])
+            self.xs_tree.insert('', 'end', iid=f'xs{i}',
+                                values=(CHK_OFF, row['source'], row['url']),
+                                tags=('downloaded',) if is_dl else ())
+            shown += 1
+            done += 1 if is_dl else 0
+        total = len(self._x_scraped)
+        extra = f' · {done} already downloaded' if done else ''
+        self.xs_count_var.set(f'{shown} shown / {total} scraped{extra}' if total
+                              else 'No X links scraped yet — pull some from the X.com tab')
+
+    def _xs_target_urls(self, fallback_all=False):
+        urls = [self.xs_tree.set(iid, 'url') for iid in self._targets(self.xs_tree, fallback_all=fallback_all)]
+        return [u for u in urls if u]
+
+    def _xs_popup_menu(self, event):
+        iid = self.xs_tree.identify_row(event.y)
+        if iid and iid not in self.xs_tree.selection():
+            self.xs_tree.selection_set(iid)
+        if self.xs_tree.selection() or self._targets(self.xs_tree):
+            try:
+                self.xs_ctx_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                self.xs_ctx_menu.grab_release()
+
+    def _xs_open_link(self, event=None):
+        sel = self.xs_tree.selection() or self._targets(self.xs_tree)
+        url = self.xs_tree.set(sel[0], 'url') if sel else None
+        if url:
+            webbrowser.open(url, new=2)
+            self.status_var.set(f'Opened {url} in browser.')
+
+    def _add_xscraped_to_queue(self, at_top=False):
+        urls = self._xs_target_urls(fallback_all=True)
+        if not urls:
+            messagebox.showinfo('Nothing to add', 'No scraped X links to queue yet.')
+            return
+        added = self._queue_urls(urls, at_top=at_top)
+        where = 'top' if at_top else 'bottom'
+        if added:
+            self.status_var.set(f'Added {added} scraped X link(s) to the {where} of the queue.')
+            self._pump()
+            self.nb.select(self.tab_downloads)
+        else:
+            messagebox.showinfo('Already queued', 'Those links are already queued or downloaded.')
+
+    def _download_xscraped_pending(self):
+        """Queue every scraped X link that isn't downloaded yet and start downloading
+        with the saved X.com login."""
+        urls = []
+        for row in self._x_scraped:
+            if not self._is_downloaded(row['url']):
+                urls.append(row['url'])
+        if not urls:
+            messagebox.showinfo('Nothing to download', 'Every scraped X link is already downloaded.')
+            return
+        added = self._queue_urls(urls, at_top=False)
+        self.status_var.set(f'Queued {added} scraped X link(s) — downloading with your saved login.')
+        self.nb.select(self.tab_downloads)
+        self._start_or_pump()
+
+    def _remove_xscraped(self):
+        """Drop the ticked/selected scraped links from the bookmark DB."""
+        targets = set(self._xs_target_urls(fallback_all=False))
+        if not targets:
+            messagebox.showinfo('Nothing selected', 'Tick or select the links you want to remove.')
+            return
+        keys = {_norm_key(u) for u in targets}
+        before = len(self.bookmarks)
+        self.bookmarks[:] = [bm for bm in self.bookmarks
+                             if not (self._is_x_source(bm.get('source'))
+                                     and _norm_key(bm.get('url', '')) in keys)]
+        removed = before - len(self.bookmarks)
+        if removed:
+            self._persist_db()
+            self._refresh_bookmark_counts()
+        self._load_xscraped(announce=False)
+        self.status_var.set(f'Removed {removed} scraped X link(s) from the saved list.')
+
+    # ════════════════════════════════════════════════════════════════
     #  Search tab
     # ════════════════════════════════════════════════════════════════
     def _build_search_tab(self, parent):
@@ -2819,8 +3005,9 @@ class DownloadManager(tk.Tk):
         # then be downloaded with the saved X.com login via "Download saved bookmarks".
         added = self._add_bookmarks_db([{'url': u, 'site': 'x.com'} for u in urls], source=f'x:{label}')
         self._refresh_bookmark_counts()
+        self._load_xscraped(announce=False)     # surface them in the dedicated X Links tab
         self.x_status_var.set(f'Saved {added} new video link(s) from {label} to the bookmark DB '
-                              f'({len(urls) - added} already saved). Click “Download saved bookmarks”.')
+                              f'({len(urls) - added} already saved). See the “X Links” tab.')
         self._x_log(f'→ saved {added} of {len(urls)} from {label} to the bookmark DB.')
         # Optionally queue them right away for download too.
         if getattr(self, 'x_autoqueue_var', None) is not None and self.x_autoqueue_var.get():
@@ -3456,6 +3643,8 @@ class DownloadManager(tk.Tk):
             self._refresh_errored()
         elif sel == str(self.tab_bookmarks) and not self.bm_tree.get_children() and self.bookmarks:
             self._load_saved_bookmarks(announce=False)
+        elif sel == str(self.tab_xscraped) and not self.xs_tree.get_children() and self.bookmarks:
+            self._load_xscraped(announce=False)
 
     # ── config persistence ────────────────────────────────────────────
     def _save_config(self):

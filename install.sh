@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Run from the project root (this script lives in scripts/).
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 
 echo "BulkDownloader — Dependency Installer"
 echo "======================================"
@@ -53,15 +52,15 @@ else
 fi
 
 # Make the launchers executable (so BulkDownloader.command double-clicks on macOS).
-chmod +x scripts/launch.sh scripts/build.sh scripts/BulkDownloader.command 2>/dev/null || true
+chmod +x ./launch.sh ./build.sh ./BulkDownloader.command 2>/dev/null || true
 
 echo ""
 echo "======================================"
 echo "Done."
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "macOS: double-click  scripts/BulkDownloader.command  to launch the app,"
-    echo "       or run  ./scripts/launch.sh  from Terminal."
+    echo "macOS: double-click  BulkDownloader.command  to launch the app,"
+    echo "       or run  ./launch.sh  from Terminal."
 else
-    echo "Run  ./scripts/launch.sh  to start BulkDownloader."
+    echo "Run  ./launch.sh  to start BulkDownloader."
 fi
 echo "======================================"

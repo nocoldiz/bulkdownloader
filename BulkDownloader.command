@@ -14,8 +14,7 @@
 # …or right-click the file → Open the first time to clear Gatekeeper.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Run from the project root (this script lives in scripts/).
-cd "$(dirname "$0")/.." || exit 1
+cd "$(dirname "$0")" || exit 1
 
 say()   { printf '%s\n' "$*"; }
 pause() { read -r -p "Press Enter to close this window…" _ ; }
@@ -42,8 +41,8 @@ fi
 # ── One-time dependency install (yt-dlp etc.) ───────────────────────────────
 if ! "$PY" -c 'import yt_dlp' >/dev/null 2>&1; then
     say "First run — installing dependencies (yt-dlp, curl_cffi)…"
-    if [ -f scripts/install.sh ]; then
-        bash scripts/install.sh || { say "Dependency install failed — see the messages above."; pause; exit 1; }
+    if [ -f ./install.sh ]; then
+        bash ./install.sh || { say "Dependency install failed — see the messages above."; pause; exit 1; }
     else
         "$PY" -m pip install -U yt-dlp "curl_cffi>=0.7.0" requests || { pause; exit 1; }
     fi

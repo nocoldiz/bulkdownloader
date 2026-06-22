@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Run from the project root (this script lives in scripts/).
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 
 # Resolve a Python 3 interpreter (python3 preferred, fall back to python).
 if command -v python3 >/dev/null 2>&1; then

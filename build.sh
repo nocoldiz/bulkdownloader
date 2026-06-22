@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 set -e
-# Build from the project root (this script lives in scripts/).
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")"
 
 # NOTE: PyInstaller cannot cross-compile. To get a standalone macOS .app you must
 # run THIS script on a Mac. Running it on Linux produces a Linux binary; the
@@ -36,16 +35,16 @@ fi
 
 echo "Building BulkDownloaderGUI for $PLATFORM..."
 "$PY" -m PyInstaller --clean --noconfirm \
-    --distpath ../dist \
-    --workpath ../build/bulkdownloader \
+    --distpath ./dist \
+    --workpath ./build/bulkdownloader \
     BulkDownloaderGUI.spec
 
 echo ""
 if [[ "$PLATFORM" == "macOS" ]]; then
-    chmod +x scripts/BulkDownloader.command 2>/dev/null || true
-    if [ -d ../dist/BulkDownloaderGUI.app ]; then
+    chmod +x ./BulkDownloader.command 2>/dev/null || true
+    if [ -d ./dist/BulkDownloaderGUI.app ]; then
         # Zip the .app bundle into a distributable release archive.
-        ( cd ../dist && rm -f BulkDownloaderGUI-mac.zip \
+        ( cd ./dist && rm -f BulkDownloaderGUI-mac.zip \
             && zip -qr BulkDownloaderGUI-mac.zip BulkDownloaderGUI.app )
         echo "Done: dist/BulkDownloaderGUI.app  (release: dist/BulkDownloaderGUI-mac.zip)"
     else
@@ -53,6 +52,6 @@ if [[ "$PLATFORM" == "macOS" ]]; then
         echo "         Run the GUI from source instead — double-click  BulkDownloader.command"
     fi
 else
-    chmod +x ../dist/BulkDownloaderGUI 2>/dev/null || true
+    chmod +x ./dist/BulkDownloaderGUI 2>/dev/null || true
     echo "Done: dist/BulkDownloaderGUI"
 fi

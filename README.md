@@ -21,6 +21,9 @@ de-duplicate identically no matter how they were added.
 - **X.com** — a built-in Chromium browser you log into once. From there, pull your Likes,
   Bookmarks, the profiles you follow, or any `@handle`'s media straight into the queue;
   the session is exported as cookies so yt-dlp can fetch gated videos.
+- **X Links** — a dedicated list of everything scraped from the X.com session (kept
+  separate from browser bookmarks). Filter, queue, download all pending with your saved
+  login, or remove links you don't want.
 - **Bot-detection bypass** — `curl_cffi` browser impersonation is enabled by default for a
   much higher success rate on Cloudflare / DataDome / PerimeterX-protected sites.
 
@@ -30,23 +33,23 @@ de-duplicate identically no matter how they were added.
 
 ```
 .
-├── src/                          # application source
-│   ├── bulkdownloader_gui.py     # tabbed Tkinter GUI / download manager (entry point)
-│   ├── bulkdownloader.py         # CLI downloader + the per-URL worker the GUI spawns
-│   ├── bulk_db.py                # shared db.json: queue, downloaded registry, bookmarks
-│   ├── site_search.py            # website registry + multi-site search/scraper
-│   ├── websites.json             # seed site registry (copied to root on first run)
-│   └── categories.json           # seed category → tags map
-├── scripts/                      # installers, launchers, build scripts
-│   ├── install.sh / install.bat  # one-time dependency installer
-│   ├── launch.sh  / launch.bat   # run the GUI from source
-│   ├── build.sh   / build.bat    # package a standalone binary with PyInstaller
-│   └── BulkDownloader.command    # double-clickable macOS launcher
-├── BulkDownloaderGUI.spec        # PyInstaller spec
-└── index.html                    # standalone web front-end (optional)
+├── src/                      # application source
+│   ├── bulkdownloader_gui.py # tabbed Tkinter GUI / download manager (entry point)
+│   ├── bulkdownloader.py     # CLI downloader + the per-URL worker the GUI spawns
+│   ├── bulk_db.py            # shared db.json: queue, downloaded registry, bookmarks
+│   ├── site_search.py        # website registry + multi-site search/scraper
+│   ├── websites.json         # seed site registry (copied to root on first run)
+│   └── categories.json       # seed category → tags map
+├── install.sh / install.bat  # one-time dependency installer
+├── launch.sh  / launch.bat   # run the GUI from source
+├── build.sh   / build.bat    # package a standalone binary with PyInstaller
+├── BulkDownloader.command    # double-clickable macOS launcher
+├── BulkDownloaderGUI.spec    # PyInstaller spec
+└── index.html                # standalone web front-end (optional)
 ```
 
-All scripts in `scripts/` work from anywhere — they `cd` to the project root themselves.
+Only the Python source lives in `src/`; the launchers, installers and build scripts
+sit in the project root and build into `./dist/` (git-ignored).
 
 Runtime files are written to the **project root** (not into `src/`) and are git-ignored:
 `db.json`, `links_to_download.txt`, `links_downloaded.txt`, `link_failed.txt`,
@@ -69,16 +72,16 @@ copies of `websites.json` / `categories.json` (seeded from `src/` on first launc
 
 ### Windows
 ```bat
-scripts\install.bat   :: one-time: install dependencies
-scripts\launch.bat    :: start the GUI
+install.bat   :: one-time: install dependencies
+launch.bat    :: start the GUI
 ```
 
 ### macOS / Linux
 ```bash
-./scripts/install.sh   # one-time: install dependencies
-./scripts/launch.sh    # start the GUI
+./install.sh   # one-time: install dependencies
+./launch.sh    # start the GUI
 ```
-On macOS you can also just double-click **`scripts/BulkDownloader.command`**.
+On macOS you can also just double-click **`BulkDownloader.command`**.
 
 ---
 
@@ -108,12 +111,12 @@ cookie setup).
 PyInstaller **cannot cross-compile** — build on the OS you are targeting.
 
 ```bash
-./scripts/build.sh    # macOS → BulkDownloaderGUI.app ; Linux → ELF binary
-scripts\build.bat     # Windows → BulkDownloaderGUI.exe
+./build.sh    # macOS → BulkDownloaderGUI.app ; Linux → ELF binary
+build.bat     # Windows → BulkDownloaderGUI.exe
 ```
 
-Output lands in `../dist/` (alongside the repo). Frozen builds keep their runtime data
-in a per-OS application-data folder instead of next to the executable.
+Output lands in `./dist/` (git-ignored). Frozen builds keep their runtime data in a
+per-OS application-data folder instead of next to the executable.
 
 ---
 
