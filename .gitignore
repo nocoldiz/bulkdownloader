@@ -1,0 +1,56 @@
+# ─── Private / sensitive data ──────────────────────────────────────────
+# Logged-in browser session for the X.com tab — contains your auth cookies.
+x_browser_profile/
+# Exported session cookies used by yt-dlp to fetch gated videos.
+cookies.txt
+*.cookies
+# Per-user GUI config (window geometry, personal output folder, etc.).
+gui_config.json
+
+# ─── Generated runtime state ───────────────────────────────────────────
+# Unified link database shared by the GUI and the console.
+db.json
+queue_db.json
+# Download queue / history / failures (regenerated from db.json).
+links_to_download.txt
+links_downloaded.txt
+link_failed.txt
+# Runtime copies of the site registry / category map. The pristine seeds are
+# tracked in src/; these root copies are written back at runtime (favourites,
+# edits) and seeded from src/ on first launch.
+/websites.json
+/categories.json
+
+# ─── Downloaded content ────────────────────────────────────────────────
+videos/
+downloads/
+*.part
+*.ytdl
+*.mp4
+*.mkv
+*.webm
+*.m4a
+*.jpg
+*.png
+
+# ─── Build artifacts (PyInstaller) ─────────────────────────────────────
+build/
+dist/
+*.exe
+*.app/
+BulkDownloaderGUI-mac.zip
+
+# ─── Python ────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ─── Editor / OS cruft ─────────────────────────────────────────────────
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp

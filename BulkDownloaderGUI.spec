@@ -13,11 +13,11 @@ IS_MAC = sys.platform == 'darwin'
 USE_UPX = not IS_MAC and shutil.which('upx') is not None
 
 a = Analysis(
-    ['bulkdownloader_gui.py'],
-    pathex=[],
+    ['src/bulkdownloader_gui.py'],
+    pathex=['src'],
     binaries=[],
-    datas=[('bulkdownloader.py', '.'), ('site_search.py', '.'),
-           ('websites.json', '.'), ('categories.json', '.')],
+    datas=[('src/bulkdownloader.py', '.'), ('src/site_search.py', '.'),
+           ('src/websites.json', '.'), ('src/categories.json', '.')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
