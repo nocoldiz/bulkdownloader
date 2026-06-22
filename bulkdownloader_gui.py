@@ -20,9 +20,11 @@ Five tabs:
   favourite's search in its own browser tab with one button.
 * **Gallery** — a thumbnail grid of every video already in the download
   folder; double-click to play in the system player.
-* **X.com** — log in for sensitive / login-gated X.com videos: use your
-  browser's live login (recommended), paste ``auth_token`` / ``ct0`` tokens
-  (with a step-by-step guide), or import / paste a ``cookies.txt``.
+* **X.com** — a built-in browser (Playwright/Chromium) you log in to once; the
+  login is remembered between runs. From there, pull your Likes, Bookmarks, the
+  profiles you follow, or any ``@handle``'s media straight into the queue, and the
+  session is exported as cookies so yt-dlp can download the gated videos. An
+  *Advanced* panel keeps the old cookies.txt / token fallbacks.
 
 The window size, download folder, parallel count and last tab are remembered
 between runs. Files land in the chosen output folder — no categorization here.
@@ -53,6 +55,13 @@ from tkinter import ttk, filedialog, messagebox
 FROZEN = getattr(sys, 'frozen', False)
 APP_DIR = Path(sys.executable).resolve().parent if FROZEN else Path(__file__).resolve().parent
 BUNDLE_DIR = Path(getattr(sys, '_MEIPASS', APP_DIR))
+
+# Shared queue/bookmarks database — the single source of truth used by BOTH this
+# GUI and the console (bulkdownloader.py). Imported from the script/bundle dir.
+for _p in (str(APP_DIR), str(BUNDLE_DIR)):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
+import bulk_db  # noqa: E402
 
 if FROZEN:
     # bulkdownloader.py is bundled as data alongside the frozen exe.
@@ -99,6 +108,15 @@ LINKS_DOWNLOADED = DATA_DIR / 'links_downloaded.txt'
 LINKS_FAILED = DATA_DIR / 'link_failed.txt'
 CONFIG_FILE = DATA_DIR / 'gui_config.json'
 
+# Single source of truth for the queue + downloaded registry + bookmarks — the
+# unified db.json shared with the console. links_*.txt are now an *import* source
+# only (fed into the queue, never emptied). OLD_DB_FILE is the pre-unification
+# file, migrated once into db.json. The env var makes child bulkdownloader.py
+# subprocesses read/write the very same file.
+DB_FILE = DATA_DIR / 'db.json'
+os.environ.setdefault('BULK_DB_FILE', str(DB_FILE))
+OLD_DB_FILE = DATA_DIR / 'queue_db.json'
+
 # Website registry — the same shape AphroArchive exports via
 # GET /api/db/websites/export. Kept in DATA_DIR so favourites persist.
 WEBSITES_JSON = DATA_DIR / 'websites.json'
@@ -109,6 +127,10 @@ CATEGORIES_JSON = DATA_DIR / 'categories.json'
 
 # Netscape-format cookies for login-gated sites (X.com sensitive/age-gated tweets).
 COOKIES_FILE = DATA_DIR / 'cookies.txt'
+
+# Persistent Chromium profile for the built-in X.com browser — keeps the login
+# between runs so likes / bookmarks / following can be scraped on demand.
+X_PROFILE_DIR = DATA_DIR / 'x_browser_profile'
 
 # Cache dir for the gallery's ffmpeg-generated thumbnails.
 THUMB_CACHE_DIR = Path(tempfile.gettempdir()) / 'aphro_gallery_thumbs'
@@ -232,47 +254,30 @@ def _read_link_lines(path):
     return [line.strip() for line in path.read_text(encoding='utf-8', errors='replace').splitlines() if line.strip()]
 
 
+# The queue + downloaded registry now live in queue_db.json. The old per-file
+# link helpers are kept as no-ops so legacy call sites stay valid while the JSON
+# db (saved via DownloadManager._persist_db) is the single source of truth.
 def _write_link_lines(path, lines):
-    try:
-        path.write_text('\n'.join(lines) + '\n' if lines else '', encoding='utf-8')
-    except OSError:
-        pass
+    return None
 
 
 def _remove_link(path, url):
-    lines = _read_link_lines(path)
-    if url in lines:
-        _write_link_lines(path, [u for u in lines if u != url])
+    return None
 
 
 def _append_link(path, url, cap=None):
-    lines = _read_link_lines(path)
-    if url not in lines:
-        lines.append(url)
-        if cap and len(lines) > cap:
-            lines = lines[-cap:]
-        _write_link_lines(path, lines)
+    return None
 
+
+# ── queue database — delegate to the shared bulk_db so the GUI and console
+# normalise + de-dup links identically ────────────────────────────────
 
 def _is_http(url):
-    return url.startswith(('http://', 'https://'))
+    return bulk_db.is_http(url)
 
 
 def _norm_key(url):
-    """De-dup key: lowercase host, drop tracking params + trailing slash/fragment.
-    Used ONLY for duplicate detection — the original URL is what gets downloaded."""
-    try:
-        p = urllib.parse.urlsplit(url.strip())
-    except ValueError:
-        return url.strip().lower()
-    host = (p.hostname or '').lower()
-    if host.startswith('www.'):
-        host = host[4:]
-    query = urllib.parse.urlencode([
-        (k, v) for k, v in urllib.parse.parse_qsl(p.query, keep_blank_values=True)
-        if k.lower() not in TRACKING_PARAMS
-    ])
-    return urllib.parse.urlunsplit((p.scheme.lower(), host, p.path.rstrip('/'), query, ''))
+    return bulk_db.norm_key(url)
 
 
 def _read_stream(stream):
@@ -611,6 +616,59 @@ def _autodetect_cookies():
     return best[1] if best else None
 
 
+# ── X.com internal browser (Playwright) — scrape Likes / Bookmarks / Following ──
+# A private Chromium profile (persisted in X_PROFILE_DIR) keeps the login between
+# runs. The browser is driven on a dedicated thread (Playwright's sync API is
+# single-thread) and posts results back through the same out_queue the downloader
+# uses. These page-evaluated snippets find the logged-in handle, video tweets, and
+# followed accounts.
+
+_JS_HANDLE = r"""
+(() => {
+  const a = document.querySelector('[data-testid="AppTabBar_Profile_Link"]');
+  const h = a ? a.getAttribute('href') : '';
+  return (h || '').replace(/^\//, '');
+})()
+"""
+
+_JS_FOLLOWING = r"""
+(() => {
+  const RESERVED = new Set(['home','explore','notifications','messages','settings',
+    'i','search','compose','bookmarks','hashtag','lists','communities','jobs',
+    'tos','privacy','login','logout','signup','about']);
+  const out = [];
+  document.querySelectorAll('[data-testid="UserCell"]').forEach(c => {
+    const a = c.querySelector('a[href^="/"]');
+    if (!a) return;
+    const m = (a.getAttribute('href') || '').match(/^\/([A-Za-z0-9_]{1,15})$/);
+    if (m && !RESERVED.has(m[1].toLowerCase())) out.push(m[1]);
+  });
+  return Array.from(new Set(out));
+})()
+"""
+
+# %s is the CSS selector picking which tweets count as "has a video".
+_JS_VIDEO_TMPL = r"""
+(() => {
+  const out = [];
+  document.querySelectorAll('article[data-testid="tweet"]').forEach(a => {
+    if (!a.querySelector('%s')) return;
+    const link = a.querySelector('a[href*="/status/"]:has(time)')
+              || a.querySelector('a[href*="/status/"]');
+    if (link) out.push(link.href.split('?')[0].replace(/\/(photo|video|analytics)\/\d+$/, ''));
+  });
+  return Array.from(new Set(out));
+})()
+"""
+
+
+def _js_video(sensitive=True):
+    sel = '[data-testid="videoComponent"], [data-testid="videoPlayer"], video'
+    if sensitive:
+        sel += ', [data-testid="previewInterstitial"]'
+    return _JS_VIDEO_TMPL % sel
+
+
 # ════════════════════════════════════════════════════════════════════
 #  Main window
 # ════════════════════════════════════════════════════════════════════
@@ -629,7 +687,17 @@ class DownloadManager(tk.Tk):
 
         self._ids = itertools.count(1)
         self.items = {}                  # iid -> {url, status, pct, file, title, speed, eta, error}
+        self.downloaded = {}             # norm_key -> {url, file, ts}  (persistent registry)
+        self.bookmarks = []              # saved video links (scraped from X, etc.)
+        self._migrated_count = 0
         self.out_queue = queue.Queue()   # worker/threads -> UI messages
+
+        # ── built-in X.com browser (Playwright) state ──
+        self._x_thread = None            # dedicated browser-driver thread
+        self._x_cmd_q = None             # commands -> browser thread
+        self._x_busy = False
+        self._x_following = []           # handles collected from "who I follow"
+        self._x_handle_name = ''
 
         # ── parallel download engine state (all mutated on the main thread) ──
         self.active = {}                 # iid -> Popen (or None until launched)
@@ -873,7 +941,7 @@ class DownloadManager(tk.Tk):
         ttk.Button(url_btns, text='📋 Paste', command=self._paste_clipboard).pack(side='left', padx=6)
         ttk.Button(url_btns, text='✖ Clear box',
                    command=lambda: self.url_text.delete('1.0', 'end')).pack(side='left')
-        ttk.Button(url_btns, text='🔄 Reload from files', command=self._reload_from_files).pack(side='right')
+        ttk.Button(url_btns, text='📥 Import links.txt', command=self._import_links_txt).pack(side='right')
 
         out_panel = ttk.LabelFrame(parent, text='Destination')
         out_panel.pack(fill='x', **pad)
@@ -905,7 +973,7 @@ class DownloadManager(tk.Tk):
         ttk.Button(ctrl, text='🔀 Shuffle', command=self._shuffle_queue).pack(side='left', padx=(10, 0))
         ttk.Button(ctrl, text='↻ Retry', command=self._retry_selected).pack(side='left', padx=6)
         ttk.Button(ctrl, text='🗑 Remove', command=self._remove_selected).pack(side='left', padx=6)
-        ttk.Button(ctrl, text='🧹 Clear finished', command=self._clear_finished).pack(side='left')
+        ttk.Button(ctrl, text='🧹 Remove done + errored', command=self._clear_finished).pack(side='left')
         ttk.Button(ctrl, text='⌫ Clear errored', command=self._clear_errored).pack(side='left', padx=6)
         ttk.Label(ctrl, textvariable=self.overall_var, style='Count.TLabel').pack(side='right')
 
@@ -914,14 +982,15 @@ class DownloadManager(tk.Tk):
         list_inner = ttk.Frame(list_panel)
         list_inner.pack(fill='both', expand=True, padx=8, pady=8)
 
-        self.tree = ttk.Treeview(list_inner, columns=('chk', 'status', 'progress', 'speed'),
-                                 show='tree headings', selectmode='extended')
-        self.tree.heading('#0', text='URL / File')
+        # Tick-box is the FIRST column (headings-only, no leading tree column).
+        self.tree = ttk.Treeview(list_inner, columns=('chk', 'name', 'status', 'progress', 'speed'),
+                                 show='headings', selectmode='extended')
+        self.tree.heading('name', text='URL / File')
         self.tree.heading('status', text='Status')
         self.tree.heading('progress', text='%')
         self.tree.heading('speed', text='Speed / ETA')
-        self.tree.column('#0', width=480, stretch=True)
         self.tree.column('chk', width=34, anchor='center', stretch=False)
+        self.tree.column('name', width=480, stretch=True)
         self.tree.column('status', width=120, anchor='w', stretch=False)
         self.tree.column('progress', width=56, anchor='e', stretch=False)
         self.tree.column('speed', width=150, anchor='w', stretch=False)
@@ -954,42 +1023,120 @@ class DownloadManager(tk.Tk):
         self.ctx_menu.add_command(label='Retry', command=self._retry_selected)
         self.ctx_menu.add_command(label='Remove', command=self._remove_selected)
         self.ctx_menu.add_separator()
-        self.ctx_menu.add_command(label='Open file / folder', command=self._open_selected_file)
+        self.ctx_menu.add_command(label='🎞 Open file', command=self._q_open_file)
+        self.ctx_menu.add_command(label='📂 Open folder', command=self._q_open_folder)
+        self.ctx_menu.add_command(label='🌐 Open link', command=self._q_open_link)
 
-    # ── queue file <-> tree sync ──────────────────────────────────────
+    # ── unified db.json <-> tree sync ─────────────────────────────────
     def _load_initial_queue(self):
-        """Populate the tree from the txt files on launch, preserving order.
-        Done rows are capped so a long history doesn't bloat the queue."""
+        """Populate the tree from the shared db.json on launch, preserving order.
+        On first run the legacy queue_db.json / links_*.txt are migrated in, and
+        links_to_download.txt is always fed into the queue (without being emptied)."""
+        data = bulk_db.load()
+        if not DB_FILE.exists() and not data['queue'] and not data['downloaded']:
+            data = self._migrate_to_db()
+
+        # Always feed links_to_download.txt into the queue section (deduped). The
+        # txt file is an input only — it is never emptied here.
+        fed = bulk_db.ingest_links_txt(data, LINKS_TO_DOWNLOAD, source='links.txt')
+
+        self.downloaded = data.get('downloaded') or {}
+        self.bookmarks = data.get('bookmarks') or []
         seen = set()
-
-        def add_all(path, status, limit=None):
-            urls = [u for u in _read_link_lines(path) if _is_http(u)]
-            if limit:
-                urls = urls[-limit:]
-            for url in urls:
-                k = _norm_key(url)
-                if k not in seen:
-                    seen.add(k)
-                    self._add_item(url, status=status)
-            return len(urls)
-
-        add_all(LINKS_TO_DOWNLOAD, ST_QUEUED)
-        add_all(LINKS_FAILED, ST_ERROR)
-        total_done = len([u for u in _read_link_lines(LINKS_DOWNLOADED) if _is_http(u)])
-        add_all(LINKS_DOWNLOADED, ST_DONE, limit=DONE_LOAD_CAP)
+        for entry in data.get('queue', []):
+            url = (entry.get('url') or '').strip()
+            if not _is_http(url):
+                continue
+            k = _norm_key(url)
+            if k in seen:
+                continue
+            seen.add(k)
+            status = entry.get('status') or ST_QUEUED
+            if status == ST_DOWNLOADING:          # never resume "downloading" — re-queue it
+                status = ST_QUEUED
+            iid = self._add_item(url, status=status)
+            it = self.items[iid]
+            it['title'] = entry.get('title')
+            it['file'] = entry.get('file')
+            it['error'] = entry.get('error') or ''
+            it['pct'] = 100 if status == ST_DONE else 0
+            self._set_item(iid)
 
         self._update_overall()
+        if self._migrated_count or fed:
+            self._persist_db()
+        # Auto-reload the saved bookmark DB into the Bookmarks tab on launch.
+        if self.bookmarks and hasattr(self, 'bm_tree'):
+            self._load_saved_bookmarks(announce=False)
         if self._next_pending():
-            extra = f' ({total_done - DONE_LOAD_CAP} older done rows hidden)' if total_done > DONE_LOAD_CAP else ''
-            self.status_var.set(f'Queue loaded from files. Press Start to download.{extra}')
+            extra = f' (+{len(fed)} from links_to_download.txt)' if fed else ''
+            self.status_var.set(f'Queue loaded.{extra} Press Start to download.')
 
-    def _rebuild_to_download_file(self):
-        urls = []
+    def _migrate_to_db(self):
+        """One-time import of the old queue_db.json (or legacy links_*.txt) into the
+        unified bulk_db schema."""
+        data = bulk_db.blank()
+        # Prefer the previous queue_db.json if present.
+        if OLD_DB_FILE.exists():
+            try:
+                old = json.loads(OLD_DB_FILE.read_text(encoding='utf-8'))
+            except (OSError, ValueError):
+                old = {}
+            for entry in (old.get('items') or []):
+                if _is_http(entry.get('url', '')):
+                    data['queue'].append({'url': entry['url'], 'status': entry.get('status') or ST_QUEUED,
+                                          'title': entry.get('title'), 'file': entry.get('file'),
+                                          'error': entry.get('error') or '', 'source': 'queue_db.json'})
+            if isinstance(old.get('downloaded'), dict):
+                data['downloaded'] = dict(old['downloaded'])
+            self._migrated_count = len(data['queue'])
+            return data
+        # Otherwise fall back to the legacy txt files.
+        for url in _read_link_lines(LINKS_FAILED):
+            if _is_http(url):
+                data['queue'].append({'url': url, 'status': ST_ERROR, 'error': 'failed on a previous run'})
+        done = [u for u in _read_link_lines(LINKS_DOWNLOADED) if _is_http(u)]
+        for url in done[-DONE_LOAD_CAP:]:
+            data['queue'].append({'url': url, 'status': ST_DONE})
+        for url in done[-DOWNLOADED_FILE_CAP:]:
+            data['downloaded'][_norm_key(url)] = {'url': url, 'file': None, 'ts': 0}
+        self._migrated_count = len(data['queue'])
+        return data
+
+    def _db_snapshot(self):
+        """Assemble the current full db (queue in display order + registry + bookmarks)."""
+        queue = []
         for iid in self.tree.get_children():
             it = self.items.get(iid)
-            if it and it['status'] in PENDING_STATUSES:
-                urls.append(it['url'])
-        _write_link_lines(LINKS_TO_DOWNLOAD, list(dict.fromkeys(urls)))
+            if not it:
+                continue
+            status = it['status']
+            if status == ST_DOWNLOADING:          # store as queued so a crash resumes cleanly
+                status = ST_QUEUED
+            queue.append({'url': it['url'], 'status': status, 'title': it.get('title'),
+                          'file': it.get('file'), 'error': it.get('error') or '',
+                          'source': it.get('source')})
+        return {'version': 2, 'queue': queue, 'downloaded': self.downloaded,
+                'bookmarks': self.bookmarks}
+
+    def _persist_db(self):
+        """Save the full queue (in display order) + downloaded registry + bookmarks."""
+        bulk_db.save(self._db_snapshot())
+
+    # Kept as the canonical "queue changed → persist" hook (legacy name).
+    def _rebuild_to_download_file(self):
+        self._persist_db()
+
+    def _is_downloaded(self, url):
+        """True when this URL was already downloaded AND its file is still present
+        (a removed file allows a re-download)."""
+        rec = self.downloaded.get(_norm_key(url))
+        if not rec:
+            return False
+        f = rec.get('file')
+        if f and not os.path.exists(f):
+            return False
+        return True
 
     # ── queue management ──────────────────────────────────────────────
     def _paste_clipboard(self):
@@ -1000,16 +1147,22 @@ class DownloadManager(tk.Tk):
         if text.strip():
             self.url_text.insert('end', text.strip() + '\n')
 
-    def _reload_from_files(self):
-        if self.is_running:
-            messagebox.showinfo('Running', 'Pause downloads before reloading the queue from files.')
+    def _import_links_txt(self):
+        """Import a plain links.txt (one URL per line) into the JSON queue."""
+        path = filedialog.askopenfilename(
+            title='Import links (.txt — one URL per line)',
+            filetypes=[('Text files', '*.txt'), ('All files', '*.*')])
+        if not path:
             return
-        for iid in list(self.tree.get_children()):
-            self.tree.delete(iid)
-        self.items.clear()
-        self.tree._checked.clear()
-        self._load_initial_queue()
-        self.status_var.set('Queue reloaded from txt files.')
+        urls = [u for u in _read_link_lines(Path(path)) if _is_http(u)]
+        if not urls:
+            messagebox.showinfo('Nothing to import', 'No http(s) URLs found in that file.')
+            return
+        added = self._queue_urls(urls, at_top=False)
+        skipped = len(urls) - added
+        self.status_var.set(f'Imported {added} new URL(s) from {os.path.basename(path)}'
+                            + (f' ({skipped} already queued or downloaded).' if skipped else '.'))
+        self._pump()
 
     def _add_box_to_queue(self, at_top=False):
         raw = self.url_text.get('1.0', 'end').splitlines()
@@ -1030,6 +1183,9 @@ class DownloadManager(tk.Tk):
                 continue
             k = _norm_key(u)
             if k in existing:
+                continue
+            if self._is_downloaded(u):       # already downloaded with file present → never re-add
+                existing.add(k)
                 continue
             existing.add(k)
             new.append(u)
@@ -1052,7 +1208,7 @@ class DownloadManager(tk.Tk):
         iid = f'item{next(self._ids)}'
         self.items[iid] = {'url': url, 'status': status, 'pct': 100 if status == ST_DONE else 0,
                            'file': None, 'title': None, 'speed': '', 'eta': '', 'error': ''}
-        self.tree.insert('', index, iid=iid, text=url, values=(CHK_OFF, '', '', ''))
+        self.tree.insert('', index, iid=iid, values=(CHK_OFF, url, '', '', ''))
         self._set_item(iid)
         return iid
 
@@ -1079,7 +1235,8 @@ class DownloadManager(tk.Tk):
         elif status == ST_ERROR and item.get('error'):
             speed_text = '⚠ double-click for details'
         tag = status if status in (ST_DONE, ST_ERROR, ST_DOWNLOADING, ST_STOPPED) else ''
-        self.tree.item(iid, text=label, tags=(tag,) if tag else ())
+        self.tree.item(iid, tags=(tag,) if tag else ())
+        self.tree.set(iid, 'name', label)
         self.tree.set(iid, 'status', STATUS_LABEL[status])
         self.tree.set(iid, 'progress', pct_text)
         self.tree.set(iid, 'speed', speed_text)
@@ -1151,17 +1308,19 @@ class DownloadManager(tk.Tk):
                 self.status_var.set('Items re-queued. Press Start to download.')
 
     def _clear_finished(self):
-        """Clear both completed AND errored rows (errored leave link_failed.txt too)."""
+        """Remove ALL completed AND errored rows from the queue (and persist)."""
+        n = 0
         for iid in list(self.tree.get_children()):
             it = self.items.get(iid)
             if it and it['status'] in (ST_DONE, ST_ERROR):
-                if it['status'] == ST_ERROR:
-                    _remove_link(LINKS_FAILED, it['url'])
                 self.items.pop(iid, None)
                 self.tree._checked.discard(iid)
                 self.tree.delete(iid)
+                n += 1
+        self._persist_db()
         self._update_overall()
         self._refresh_errored()
+        self.status_var.set(f'Removed {n} done / errored row(s) from the queue.')
 
     def _move_targets(self, index):
         for iid in self._targets(self.tree):
@@ -1230,16 +1389,16 @@ class DownloadManager(tk.Tk):
             self.status_var.set('⚡ Downloading now…')
 
     def _clear_errored(self):
-        """Remove every failed row from the queue and from link_failed.txt."""
+        """Remove every failed row from the queue (and persist)."""
         n = 0
         for iid in list(self.tree.get_children()):
             it = self.items.get(iid)
             if it and it['status'] == ST_ERROR:
-                _remove_link(LINKS_FAILED, it['url'])
                 self.items.pop(iid, None)
                 self.tree._checked.discard(iid)
                 self.tree.delete(iid)
                 n += 1
+        self._persist_db()
         self._update_overall()
         self._refresh_errored()
         self.status_var.set(f'Cleared {n} errored item(s).')
@@ -1479,12 +1638,12 @@ class DownloadManager(tk.Tk):
         list_panel.pack(fill='both', expand=True, **pad)
         list_inner = ttk.Frame(list_panel)
         list_inner.pack(fill='both', expand=True, padx=8, pady=8)
-        self.err_tree = ttk.Treeview(list_inner, columns=('chk', 'reason'),
-                                     show='tree headings', selectmode='extended')
-        self.err_tree.heading('#0', text='URL')
+        self.err_tree = ttk.Treeview(list_inner, columns=('chk', 'url', 'reason'),
+                                     show='headings', selectmode='extended')
+        self.err_tree.heading('url', text='URL')
         self.err_tree.heading('reason', text='Reason')
-        self.err_tree.column('#0', width=440, stretch=True)
         self.err_tree.column('chk', width=34, anchor='center', stretch=False)
+        self.err_tree.column('url', width=440, stretch=True)
         self.err_tree.column('reason', width=360, stretch=True)
         esb = ttk.Scrollbar(list_inner, command=self.err_tree.yview)
         self.err_tree.configure(yscrollcommand=esb.set)
@@ -1504,8 +1663,8 @@ class DownloadManager(tk.Tk):
         for iid in self.tree.get_children():
             it = self.items.get(iid)
             if it and it['status'] == ST_ERROR:
-                self.err_tree.insert('', 'end', iid=iid, text=it['url'],
-                                     values=(CHK_OFF, it.get('error') or 'unknown error'))
+                self.err_tree.insert('', 'end', iid=iid,
+                                     values=(CHK_OFF, it['url'], it.get('error') or 'unknown error'))
                 n += 1
         self.err_count_var.set(f'{n} failed' if n else 'No failed downloads')
 
@@ -1701,8 +1860,18 @@ class DownloadManager(tk.Tk):
                    command=lambda: self._load_bookmarks('chromium')).pack(side='left', padx=6)
         ttk.Button(src, text='📚 Load all', style='Accent.TButton',
                    command=lambda: self._load_bookmarks('all')).pack(side='left')
+        ttk.Button(src, text='💾 Saved (DB)', command=self._load_saved_bookmarks).pack(side='left', padx=6)
         self.bm_count_var = tk.StringVar(value='')
         ttk.Label(src, textvariable=self.bm_count_var, style='Count.TLabel').pack(side='right')
+
+        save = ttk.Frame(parent)
+        save.pack(fill='x', padx=12)
+        ttk.Button(save, text='⭳ Save shown to DB (permanent)',
+                   command=self._save_shown_bookmarks).pack(side='left')
+        ttk.Button(save, text='📥 Import queue as bookmarks',
+                   command=self._import_queue_to_bookmarks).pack(side='left', padx=6)
+        ttk.Label(save, text='Saved bookmarks auto-reload on launch.',
+                  style='Sub.TLabel').pack(side='left', padx=(8, 0))
 
         filt = ttk.Frame(parent)
         filt.pack(fill='x', **pad)
@@ -1720,25 +1889,88 @@ class DownloadManager(tk.Tk):
         list_inner = ttk.Frame(list_panel)
         list_inner.pack(fill='both', expand=True, padx=8, pady=8)
 
-        self.bm_tree = ttk.Treeview(list_inner, columns=('chk', 'site', 'url'),
-                                    show='tree headings', selectmode='extended')
-        self.bm_tree.heading('#0', text='Title')
+        self.bm_tree = ttk.Treeview(list_inner, columns=('chk', 'title', 'site', 'url'),
+                                    show='headings', selectmode='extended')
+        self.bm_tree.heading('title', text='Title')
         self.bm_tree.heading('site', text='Site')
         self.bm_tree.heading('url', text='URL')
-        self.bm_tree.column('#0', width=300, stretch=True)
         self.bm_tree.column('chk', width=34, anchor='center', stretch=False)
+        self.bm_tree.column('title', width=300, stretch=True)
         self.bm_tree.column('site', width=110, stretch=False)
         self.bm_tree.column('url', width=340, stretch=True)
         bm_scroll = ttk.Scrollbar(list_inner, command=self.bm_tree.yview)
         self.bm_tree.configure(yscrollcommand=bm_scroll.set)
         self.bm_tree.pack(side='left', fill='both', expand=True)
         bm_scroll.pack(side='right', fill='y')
+        self.bm_tree.tag_configure('downloaded', foreground=SUCCESS)
         self._setup_checktree(self.bm_tree)
+        self.bm_tree.bind('<Double-1>', self._bm_open_link)
+        self.bm_tree.bind('<Button-3>', self._bm_popup_menu)
+        self.bm_tree.bind('<Button-2>', self._bm_popup_menu)
+
+        # Context menu for bookmarks: open the page, or the local file/folder if downloaded.
+        self.bm_ctx_menu = tk.Menu(self, tearoff=0)
+        self.bm_ctx_menu.add_command(label='🌐 Open link', command=self._bm_open_link)
+        self.bm_ctx_menu.add_command(label='🎞 Open downloaded file', command=self._bm_open_file)
+        self.bm_ctx_menu.add_command(label='📂 Open folder', command=self._bm_open_folder)
+        self.bm_ctx_menu.add_separator()
+        self.bm_ctx_menu.add_command(label='⤴ Add to top', command=lambda: self._add_bookmarks_to_queue(at_top=True))
+        self.bm_ctx_menu.add_command(label='⤵ Add to bottom', command=lambda: self._add_bookmarks_to_queue(at_top=False))
 
     def _load_bookmarks(self, source):
         self.bm_count_var.set('Reading bookmarks…')
         self.status_var.set('Reading browser bookmarks…')
         threading.Thread(target=self._read_bookmarks_thread, args=(source,), daemon=True).start()
+
+    def _load_saved_bookmarks(self, announce=True):
+        """Show the saved bookmark DB (browser imports + links scraped from X.com)
+        in this tab. Downloaded ones are highlighted; the rest can be queued."""
+        results = []
+        for bm in self.bookmarks:
+            url = bm.get('url', '')
+            if not _is_http(url):
+                continue
+            results.append({'site': bm.get('site') or _host_of(url) or 'saved',
+                            'title': bm.get('title') or url, 'url': url})
+        self._all_bookmarks = results
+        self._refilter_bookmarks()
+        if announce:
+            self.status_var.set(f'Loaded {len(results)} saved bookmark(s) from the DB.')
+
+    def _save_shown_bookmarks(self):
+        """Persist the currently shown (ticked, or all) bookmarks into the DB."""
+        rows = self._targets(self.bm_tree, fallback_all=True)
+        items = []
+        for iid in rows:
+            try:
+                i = int(iid[2:])              # rows are 'bm{i}' into _all_bookmarks
+            except (ValueError, IndexError):
+                continue
+            if 0 <= i < len(self._all_bookmarks):
+                bm = self._all_bookmarks[i]
+                items.append({'url': bm['url'], 'title': bm.get('title'), 'site': bm.get('site')})
+        if not items:
+            messagebox.showinfo('Nothing to save', 'Load some bookmarks first.')
+            return
+        added = self._add_bookmarks_db(items, source='bookmarks')
+        self._refresh_bookmark_counts()
+        self.status_var.set(f'Saved {added} bookmark(s) to the DB permanently '
+                            f'({len(items) - added} already saved).')
+
+    def _import_queue_to_bookmarks(self):
+        """Save every current queue link into the bookmark DB (deduped)."""
+        items = []
+        for iid in self.tree.get_children():
+            it = self.items.get(iid)
+            if it and _is_http(it.get('url', '')):
+                items.append({'url': it['url'], 'title': it.get('title'), 'site': _host_of(it['url'])})
+        if not items:
+            messagebox.showinfo('Empty queue', 'No queue links to import.')
+            return
+        added = self._add_bookmarks_db(items, source='queue')
+        self._refresh_bookmark_counts()
+        self.status_var.set(f'Imported {added} queue link(s) into the bookmark DB '
+                            f'({len(items) - added} already saved).')
 
     def _read_bookmarks_thread(self, source):
         matchers = _build_site_matchers(self.sites_raw)
@@ -1772,16 +2004,63 @@ class DownloadManager(tk.Tk):
         self.bm_tree._checked.clear()
         for iid in self.bm_tree.get_children():
             self.bm_tree.delete(iid)
-        shown = 0
+        shown = done = 0
         for i, bm in enumerate(self._all_bookmarks):
             if needle and needle not in bm['title'].lower() \
                     and needle not in bm['url'].lower() and needle not in bm['site'].lower():
                 continue
-            self.bm_tree.insert('', 'end', iid=f'bm{i}', text=bm['title'],
-                                values=(CHK_OFF, bm['site'], bm['url']))
+            is_dl = self._is_downloaded(bm['url'])
+            title = ('✓ ' + bm['title']) if is_dl else bm['title']
+            self.bm_tree.insert('', 'end', iid=f'bm{i}',
+                                values=(CHK_OFF, title, bm['site'], bm['url']),
+                                tags=('downloaded',) if is_dl else ())
             shown += 1
+            done += 1 if is_dl else 0
         total = len(self._all_bookmarks)
-        self.bm_count_var.set(f'{shown} shown / {total} matched' if total else 'No bookmarks loaded')
+        extra = f' · {done} already downloaded' if done else ''
+        self.bm_count_var.set(f'{shown} shown / {total} matched{extra}' if total else 'No bookmarks loaded')
+
+    # ── bookmark row actions (context menu / double-click) ────────────
+    def _bm_popup_menu(self, event):
+        iid = self.bm_tree.identify_row(event.y)
+        if iid and iid not in self.bm_tree.selection():
+            self.bm_tree.selection_set(iid)
+        if self.bm_tree.selection() or self._targets(self.bm_tree):
+            try:
+                self.bm_ctx_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                self.bm_ctx_menu.grab_release()
+
+    def _bm_selected_url(self):
+        sel = self.bm_tree.selection() or self._targets(self.bm_tree)
+        if not sel:
+            return None
+        return self.bm_tree.set(sel[0], 'url') or None
+
+    def _bm_open_link(self, event=None):
+        url = self._bm_selected_url()
+        if url:
+            webbrowser.open(url, new=2)
+            self.status_var.set(f'Opened {url} in browser.')
+
+    def _bm_downloaded_file(self):
+        url = self._bm_selected_url()
+        if not url:
+            return None
+        rec = self.downloaded.get(_norm_key(url))
+        f = rec.get('file') if rec else None
+        return f if (f and os.path.exists(f)) else None
+
+    def _bm_open_file(self):
+        f = self._bm_downloaded_file()
+        if f:
+            self._open_file(f)
+        else:
+            messagebox.showinfo('Not downloaded', 'No downloaded file is recorded for this bookmark yet.')
+
+    def _bm_open_folder(self):
+        f = self._bm_downloaded_file()
+        self._open_path(Path(f).parent if f else Path(self.out_dir.get()))
 
     def _add_bookmarks_to_queue(self, at_top=False):
         rows = self._targets(self.bm_tree, fallback_all=True)
@@ -1833,13 +2112,13 @@ class DownloadManager(tk.Tk):
         list_inner = ttk.Frame(list_panel)
         list_inner.pack(fill='both', expand=True, padx=8, pady=8)
 
-        self.search_tree = ttk.Treeview(list_inner, columns=('chk', 'fav', 'url'),
-                                        show='tree headings', selectmode='extended')
-        self.search_tree.heading('#0', text='Website')
+        self.search_tree = ttk.Treeview(list_inner, columns=('chk', 'site', 'fav', 'url'),
+                                        show='headings', selectmode='extended')
+        self.search_tree.heading('site', text='Website')
         self.search_tree.heading('fav', text='★')
         self.search_tree.heading('url', text='Search URL')
-        self.search_tree.column('#0', width=200, stretch=False)
         self.search_tree.column('chk', width=34, anchor='center', stretch=False)
+        self.search_tree.column('site', width=200, stretch=False)
         self.search_tree.column('fav', width=40, anchor='center', stretch=False)
         self.search_tree.column('url', width=480, stretch=True)
         s_scroll = ttk.Scrollbar(list_inner, command=self.search_tree.yview)
@@ -1868,8 +2147,8 @@ class DownloadManager(tk.Tk):
             s = self.sites_raw[idx]
             fav = bool(s.get('favourite'))
             self.search_tree.insert('', 'end', iid=f'site{idx}',
-                                    text=self._site_label(s),
-                                    values=(CHK_OFF, '★' if fav else '☆', s.get('searchURL') or ''),
+                                    values=(CHK_OFF, self._site_label(s), '★' if fav else '☆',
+                                            s.get('searchURL') or ''),
                                     tags=('fav',) if fav else ())
 
     def _open_random_search(self):
@@ -1886,7 +2165,7 @@ class DownloadManager(tk.Tk):
     def _on_search_click(self, event):
         if self.search_tree.identify_region(event.x, event.y) != 'cell':
             return None
-        if self.search_tree.identify_column(event.x) != '#2':   # the ★ column
+        if self.search_tree.identify_column(event.x) != '#3':   # the ★ column (chk, site, fav, url)
             return None
         iid = self.search_tree.identify_row(event.y)
         if iid:
@@ -2192,55 +2471,144 @@ class DownloadManager(tk.Tk):
 
         head = ttk.Frame(parent)
         head.pack(fill='x', **pad)
-        ttk.Label(head, text='X.com login', style='Header.TLabel').pack(anchor='w')
-        ttk.Label(head, text='Sensitive / login-gated X.com videos need your login. Pick ONE method below.',
-                  style='Sub.TLabel').pack(anchor='w')
+        ttk.Label(head, text='X.com — built-in browser & scraper', style='Header.TLabel').pack(anchor='w')
+        ttk.Label(head, text='Log in to X.com once in the built-in browser — the login is remembered between '
+                             'runs. Then pull your Likes, Bookmarks, the profiles you follow, or any @handle '
+                             'straight into the download queue.',
+                  style='Sub.TLabel', wraplength=900, justify='left').pack(anchor='w')
 
+        self.x_status_var = tk.StringVar(value='○ Browser not opened yet.')
+        ttk.Label(parent, textvariable=self.x_status_var, style='Status.TLabel',
+                  wraplength=900).pack(anchor='w', padx=12, pady=(0, 2))
+        # Kept for the advanced cookie fallback + the "login saved" message.
         self.cookie_status_var = tk.StringVar(value=_cookie_status(self._config))
+
+        # ① browser controls
+        bctl = ttk.LabelFrame(parent, text='① Built-in browser')
+        bctl.pack(fill='x', **pad)
+        row1 = ttk.Frame(bctl)
+        row1.pack(fill='x', padx=8, pady=8)
+        self.x_open_btn = ttk.Button(row1, text='🌐 Open X.com & log in', style='Accent.TButton',
+                                     command=self._x_open)
+        self.x_open_btn.pack(side='left')
+        ttk.Button(row1, text='🍪 Save login for downloads', command=self._x_export).pack(side='left', padx=6)
+        ttk.Button(row1, text='✖ Close browser', command=self._x_close).pack(side='left')
+        self.x_login_var = tk.StringVar(value='Login: unknown')
+        ttk.Label(row1, textvariable=self.x_login_var, style='Count.TLabel').pack(side='right')
+        row1b = ttk.Frame(bctl)
+        row1b.pack(fill='x', padx=8, pady=(0, 8))
+        ttk.Label(row1b, text='First time only:', style='Sub.TLabel').pack(side='left')
+        ttk.Button(row1b, text='⚙ Set up browser engine', command=self._x_setup_engine).pack(side='left', padx=6)
+        ttk.Label(row1b, text='(installs Playwright + a private Chromium — one ~150 MB download)',
+                  style='Sub.TLabel').pack(side='left')
+
+        # ② scrape sources → bookmark DB
+        sp = ttk.LabelFrame(parent, text='② Scrape video links into the bookmark DB')
+        sp.pack(fill='x', **pad)
+        opts = ttk.Frame(sp)
+        opts.pack(fill='x', padx=8, pady=(8, 4))
+        ttk.Label(opts, text='Max per source:').pack(side='left')
+        self.x_max_var = tk.IntVar(value=int(self._config.get('x_max_items', 300) or 300))
+        ttk.Spinbox(opts, from_=10, to=5000, increment=50, width=6, textvariable=self.x_max_var,
+                    command=self._save_config).pack(side='left', padx=(4, 12))
+        self.x_sensitive_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(opts, text='Include sensitive / blurred media',
+                        variable=self.x_sensitive_var).pack(side='left')
+        self.x_autoqueue_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opts, text='Queue immediately too', variable=self.x_autoqueue_var).pack(side='left', padx=(12, 0))
+        self.x_at_top_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(opts, text='…at top', variable=self.x_at_top_var).pack(side='left', padx=(6, 0))
+
+        srcrow = ttk.Frame(sp)
+        srcrow.pack(fill='x', padx=8, pady=(0, 6))
+        b_likes = ttk.Button(srcrow, text='❤ My Likes', command=lambda: self._x_scrape('likes'))
+        b_likes.pack(side='left')
+        b_bm = ttk.Button(srcrow, text='🔖 My Bookmarks', command=lambda: self._x_scrape('bookmarks'))
+        b_bm.pack(side='left', padx=6)
+        b_foll = ttk.Button(srcrow, text='👥 Scan who I follow', command=self._x_following)
+        b_foll.pack(side='left')
+        self.x_follow_btn = ttk.Button(srcrow, text='⬇ Media from all followed', state='disabled',
+                                       command=self._x_follow_media)
+        self.x_follow_btn.pack(side='left', padx=6)
+
+        hrow = ttk.Frame(sp)
+        hrow.pack(fill='x', padx=8, pady=(0, 8))
+        ttk.Label(hrow, text='Profile @handle:').pack(side='left')
+        self.x_handle_var = tk.StringVar()
+        e = ttk.Entry(hrow, textvariable=self.x_handle_var, width=22)
+        e.pack(side='left', padx=6)
+        e.bind('<Return>', lambda ev: self._x_scrape('handle'))
+        b_prof = ttk.Button(hrow, text='👤 Scrape this profile’s media', command=lambda: self._x_scrape('handle'))
+        b_prof.pack(side='left')
+        ttk.Label(hrow, text='Per followed profile:').pack(side='left', padx=(16, 4))
+        self.x_per_var = tk.IntVar(value=int(self._config.get('x_per_profile', 40) or 40))
+        ttk.Spinbox(hrow, from_=5, to=500, increment=5, width=5, textvariable=self.x_per_var,
+                    command=self._save_config).pack(side='left')
+
+        # ③ generic scrape (current page) + download the saved bookmarks
+        dlrow = ttk.LabelFrame(parent, text='③ Find any video links here, then download them')
+        dlrow.pack(fill='x', **pad)
+        drow = ttk.Frame(dlrow)
+        drow.pack(fill='x', padx=8, pady=8)
+        b_page = ttk.Button(drow, text='🔎 Scrape video links (this page)', command=self._x_scrape_page)
+        b_page.pack(side='left')
+        ttk.Button(drow, text='⬇ Download saved bookmarks', style='Accent.TButton',
+                   command=self._download_bookmarks).pack(side='left', padx=6)
+        self.x_bm_var = tk.StringVar(value='Bookmark DB: 0 saved')
+        ttk.Label(drow, textvariable=self.x_bm_var, style='Count.TLabel').pack(side='right')
+
+        self._x_source_btns = [self.x_open_btn, b_likes, b_bm, b_foll, b_prof, b_page]
+        self.after(200, self._refresh_bookmark_counts)
+
+        # activity log
+        logf = ttk.LabelFrame(parent, text='Activity')
+        logf.pack(fill='both', expand=True, **pad)
+        lw = ttk.Frame(logf)
+        lw.pack(fill='both', expand=True, padx=8, pady=8)
+        self.x_log_text = tk.Text(lw, height=6, bg=LOG_BG, fg=LOG_FG, font=FONT_MONO, wrap='word',
+                                  relief='flat', borderwidth=0, state='disabled')
+        lsb = ttk.Scrollbar(lw, command=self.x_log_text.yview)
+        self.x_log_text.configure(yscrollcommand=lsb.set)
+        self.x_log_text.pack(side='left', fill='both', expand=True)
+        lsb.pack(side='right', fill='y')
+
+        # maintenance + advanced fallback
+        foot = ttk.Frame(parent)
+        foot.pack(fill='x', **pad)
+        ttk.Button(foot, text='⬆ Update yt-dlp', command=lambda: self._update_ytdlp(False)).pack(side='left')
+        ttk.Button(foot, text='⬆ Nightly', command=lambda: self._update_ytdlp(True)).pack(side='left', padx=6)
+        self._x_adv_visible = False
+        self.x_adv_btn = ttk.Button(foot, text='⚙ Advanced: cookies / tokens ▸', command=self._x_toggle_advanced)
+        self.x_adv_btn.pack(side='right')
+
+        self.x_adv_frame = ttk.Frame(parent)
+        self._build_xlogin_advanced(self.x_adv_frame)   # built now, shown on demand
+
+    def _build_xlogin_advanced(self, parent):
+        """Fallback cookie/token login methods (used when the built-in browser can't
+        be installed). yt-dlp reads these cookies for downloads."""
+        pad = {'padx': 12, 'pady': 6}
+        ttk.Label(parent, text='Fallback login methods — yt-dlp reads these cookies for downloads.',
+                  style='Sub.TLabel', wraplength=900, justify='left').pack(anchor='w', padx=12, pady=(4, 2))
         ttk.Label(parent, textvariable=self.cookie_status_var, style='Status.TLabel',
                   wraplength=900).pack(anchor='w', padx=12, pady=(0, 4))
 
-        maint = ttk.Frame(parent)
-        maint.pack(fill='x', padx=12, pady=(0, 4))
-        ttk.Label(maint, text='X.com downloads break when yt-dlp is outdated — update it if they fail:',
-                  style='Sub.TLabel').pack(side='left')
-        ttk.Button(maint, text='⬆ Update yt-dlp', command=lambda: self._update_ytdlp(False)).pack(side='left', padx=6)
-        ttk.Button(maint, text='⬆ Nightly', command=lambda: self._update_ytdlp(True)).pack(side='left')
-
-        # Method 1 — browser login (recommended)
-        m1 = ttk.LabelFrame(parent, text='① Recommended: use your browser login (no copy-paste)')
+        m1 = ttk.LabelFrame(parent, text='Use your real browser’s live login (no copy-paste)')
         m1.pack(fill='x', **pad)
-        ttk.Label(m1, text='Stay logged in to x.com in your browser; yt-dlp reads its cookies live. '
-                          'Firefox is the most reliable — Chrome/Edge on Windows encrypt their cookie '
-                          'store (v127+) and often fail, so close them or prefer Firefox.',
-                  style='Sub.TLabel', wraplength=900, justify='left').pack(anchor='w', padx=8, pady=(6, 2))
         m1row = ttk.Frame(m1)
-        m1row.pack(fill='x', padx=8, pady=(0, 8))
+        m1row.pack(fill='x', padx=8, pady=8)
         ttk.Label(m1row, text='Browser:').pack(side='left')
         self.browser_var = tk.StringVar(value=self._config.get('cookies_from_browser') or 'firefox')
         ttk.Combobox(m1row, textvariable=self.browser_var, values=BROWSER_CHOICES,
                      state='readonly', width=12).pack(side='left', padx=6)
-        ttk.Button(m1row, text='✓ Use this browser login', style='Accent.TButton',
-                   command=self._use_browser_login).pack(side='left')
-        ttk.Button(m1row, text='Stop using browser login',
-                   command=self._clear_browser_login).pack(side='left', padx=6)
+        ttk.Button(m1row, text='✓ Use this browser login', command=self._use_browser_login).pack(side='left')
+        ttk.Button(m1row, text='Stop', command=self._clear_browser_login).pack(side='left', padx=6)
+        ttk.Button(m1row, text='🔎 Auto-detect', command=self._autodetect_cookies_action).pack(side='left')
 
-        # Method 2 — paste tokens, with a step-by-step guide
-        m2 = ttk.LabelFrame(parent, text='② Paste tokens')
+        m2 = ttk.LabelFrame(parent, text='Paste tokens (auth_token / ct0)')
         m2.pack(fill='x', **pad)
-        guide = (
-            'Step-by-step:\n'
-            '  1.  Open  https://x.com  in your browser and log in.\n'
-            '  2.  Press  F12  to open Developer Tools.\n'
-            '  3.  Open the “Application” tab (Chrome/Edge) or “Storage” tab (Firefox).\n'
-            '  4.  In the left sidebar expand  Cookies  →  click  https://x.com.\n'
-            '  5.  Find the row named  auth_token  →  copy its Value into the field below.\n'
-            '  6.  Find the row named  ct0  →  copy its Value into the field below.\n'
-            '  7.  Click  “Save tokens”.'
-        )
-        ttk.Label(m2, text=guide, style='Guide.TLabel', justify='left').pack(anchor='w', padx=8, pady=(6, 4))
         tok = ttk.Frame(m2)
-        tok.pack(fill='x', padx=8, pady=(0, 8))
+        tok.pack(fill='x', padx=8, pady=8)
         ttk.Label(tok, text='auth_token:').grid(row=0, column=0, sticky='w', pady=3)
         self.auth_token_var = tk.StringVar()
         ttk.Entry(tok, textvariable=self.auth_token_var).grid(row=0, column=1, sticky='we', padx=6, pady=3)
@@ -2250,23 +2618,495 @@ class DownloadManager(tk.Tk):
         tok.columnconfigure(1, weight=1)
         ttk.Button(tok, text='💾 Save tokens', command=self._save_tokens).grid(row=2, column=1, sticky='e', pady=(4, 0))
 
-        # Method 3 — cookies.txt file
-        m3 = ttk.LabelFrame(parent, text='③ Import a cookies.txt')
-        m3.pack(fill='both', expand=True, **pad)
+        m3 = ttk.LabelFrame(parent, text='Import / paste a cookies.txt')
+        m3.pack(fill='x', **pad)
         row = ttk.Frame(m3)
         row.pack(fill='x', padx=8, pady=(8, 4))
         ttk.Button(row, text='📄 Import cookies.txt…', command=self._import_cookies_file).pack(side='left')
-        ttk.Button(row, text='🔎 Auto-detect', command=self._autodetect_cookies_action).pack(side='left', padx=6)
-        ttk.Button(row, text='🗑 Clear cookies', style='Stop.TButton', command=self._clear_cookies).pack(side='left')
+        ttk.Button(row, text='🗑 Clear cookies', style='Stop.TButton', command=self._clear_cookies).pack(side='left', padx=6)
         raw_inner = ttk.Frame(m3)
-        raw_inner.pack(fill='both', expand=True, padx=8, pady=4)
+        raw_inner.pack(fill='x', padx=8, pady=4)
         ttk.Label(raw_inner, text='…or paste a raw Netscape cookies.txt:', style='Sub.TLabel').pack(anchor='w')
         self.raw_cookies_text = tk.Text(raw_inner, height=4, wrap='none', font=FONT_MONO,
                                         relief='flat', borderwidth=1, highlightthickness=1,
                                         highlightbackground=BORDER, highlightcolor=ACCENT)
-        self.raw_cookies_text.pack(fill='both', expand=True, pady=(2, 4))
+        self.raw_cookies_text.pack(fill='x', pady=(2, 4))
         ttk.Button(m3, text='💾 Save pasted cookies',
                    command=self._save_raw_cookies).pack(anchor='e', padx=8, pady=(0, 8))
+
+    def _x_toggle_advanced(self):
+        if self._x_adv_visible:
+            self.x_adv_frame.pack_forget()
+            self._x_adv_visible = False
+            self.x_adv_btn.configure(text='⚙ Advanced: cookies / tokens ▸')
+        else:
+            self.x_adv_frame.pack(fill='x', padx=12, pady=6)
+            self._x_adv_visible = True
+            self.x_adv_btn.configure(text='⚙ Advanced: cookies / tokens ▾')
+
+    # ════════════════════════════════════════════════════════════════
+    #  X.com browser — UI thread side (buttons, log, results)
+    # ════════════════════════════════════════════════════════════════
+    def _x_playwright_available(self):
+        try:
+            import importlib.util
+            return importlib.util.find_spec('playwright') is not None
+        except Exception:
+            return False
+
+    def _x_require_engine(self):
+        if self._x_playwright_available():
+            return True
+        if messagebox.askyesno('Browser engine needed',
+                               'The built-in browser needs a one-time setup (Playwright + a private '
+                               'Chromium, ~150 MB). Set it up now?'):
+            self._x_setup_engine()
+        return False
+
+    def _x_setup_engine(self):
+        if not self._console_open:
+            self._toggle_console()
+        self.x_status_var.set('Setting up browser engine… (see console)')
+        threading.Thread(target=self._x_setup_engine_thread, daemon=True).start()
+
+    def _x_setup_engine_thread(self):
+        for cmd in ([_python_bin(), '-m', 'pip', 'install', '-U', 'playwright'],
+                    [_python_bin(), '-m', 'playwright', 'install', 'chromium']):
+            self.out_queue.put(('console', None, f'[setup] {" ".join(cmd)}', None))
+            try:
+                proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                        stderr=subprocess.STDOUT, text=True, encoding='utf-8',
+                                        errors='replace', **_subprocess_flags())
+                for line in _read_stream(proc.stdout):
+                    line = line.strip()
+                    if line:
+                        self.out_queue.put(('console', None, f'[setup] {line}', None))
+                code = proc.wait()
+            except OSError as e:
+                self.out_queue.put(('console', None, f'[setup] error: {e}', None))
+                self.out_queue.put(('x_status', None, f'Engine setup failed: {e}', None))
+                return
+            if code != 0:
+                self.out_queue.put(('x_status', None, 'Engine setup failed — see console.', None))
+                return
+        self.out_queue.put(('x_status', None, '✓ Browser engine ready — click “Open X.com & log in”.', None))
+
+    # ── thread lifecycle ──
+    def _ensure_x_browser(self):
+        if self._x_thread and self._x_thread.is_alive():
+            return
+        self._x_cmd_q = queue.Queue()
+        self._x_thread = threading.Thread(target=self._x_loop, daemon=True)
+        self._x_thread.start()
+
+    def _x_send(self, cmd):
+        self._ensure_x_browser()
+        try:
+            self._x_cmd_q.put(cmd)
+        except Exception:
+            pass
+
+    # ── button commands ──
+    def _x_open(self):
+        if not self._x_require_engine():
+            return
+        self.x_status_var.set('Opening browser…')
+        self._x_send({'op': 'open'})
+
+    def _x_close(self):
+        if self._x_thread and self._x_thread.is_alive() and self._x_cmd_q:
+            try:
+                self._x_cmd_q.put({'op': 'quit'})
+            except Exception:
+                pass
+        self.x_status_var.set('Closing browser…')
+        self.x_login_var.set('Login: unknown')
+
+    def _x_export(self):
+        if not (self._x_thread and self._x_thread.is_alive()):
+            messagebox.showinfo('Browser not open', 'Open the X.com browser and log in first.')
+            return
+        self._x_send({'op': 'export'})
+
+    def _x_scrape(self, kind):
+        if not self._x_require_engine():
+            return
+        self._save_config()
+        cmd = {'op': kind, 'cap': max(10, int(self.x_max_var.get() or 300)),
+               'at_top': bool(self.x_at_top_var.get()), 'sensitive': bool(self.x_sensitive_var.get())}
+        if kind == 'handle':
+            h = self.x_handle_var.get().strip().lstrip('@')
+            if not h:
+                messagebox.showinfo('Handle needed', 'Type a profile @handle to scrape its media.')
+                return
+            cmd['handle'] = h
+        self.x_status_var.set(f'Scraping {kind}…')
+        self._x_send(cmd)
+
+    def _x_scrape_page(self):
+        """Generic: find every video link on whatever page is open in the browser."""
+        if not self._x_require_engine():
+            return
+        self._save_config()
+        self.x_status_var.set('Scraping video links on the current page…')
+        self._x_send({'op': 'page', 'cap': max(10, int(self.x_max_var.get() or 300)),
+                      'sensitive': bool(self.x_sensitive_var.get())})
+
+    def _x_following(self):
+        if not self._x_require_engine():
+            return
+        self.x_status_var.set('Scanning who you follow…')
+        self._x_send({'op': 'following', 'cap': 2000})
+
+    def _x_follow_media(self):
+        if not self._x_following:
+            return
+        per = max(5, int(self.x_per_var.get() or 40))
+        if not messagebox.askyesno('Scrape followed profiles',
+                                    f'Scrape up to {per} media tweets from each of '
+                                    f'{len(self._x_following)} followed profile(s)? This can take a while.'):
+            return
+        self.x_status_var.set(f'Scraping media from {len(self._x_following)} followed profiles…')
+        self._x_send({'op': 'follow_media', 'handles': list(self._x_following), 'per': per,
+                      'at_top': bool(self.x_at_top_var.get()), 'sensitive': bool(self.x_sensitive_var.get())})
+
+    # ── UI-thread message handlers (called from _poll_queue) ──
+    def _xpost(self, kind, a=None, b=None):
+        self.out_queue.put((kind, None, a, b))
+
+    def _x_set_busy(self, busy):
+        self._x_busy = busy
+        state = 'disabled' if busy else 'normal'
+        for b in getattr(self, '_x_source_btns', []):
+            try:
+                b.configure(state=state)
+            except tk.TclError:
+                pass
+        if hasattr(self, 'x_follow_btn'):
+            try:
+                self.x_follow_btn.configure(
+                    state='normal' if (not busy and self._x_following) else 'disabled')
+            except tk.TclError:
+                pass
+
+    def _x_log(self, line):
+        if not hasattr(self, 'x_log_text'):
+            return
+        self.x_log_text.configure(state='normal')
+        self.x_log_text.insert('end', line + '\n')
+        try:
+            last = int(self.x_log_text.index('end-1c').split('.')[0])
+            if last > 500:
+                self.x_log_text.delete('1.0', f'{last - 400}.0')
+        except (ValueError, tk.TclError):
+            pass
+        self.x_log_text.see('end')
+        self.x_log_text.configure(state='disabled')
+
+    def _x_handle_result(self, payload):
+        urls = [u for u in (payload.get('urls') or []) if _is_http(u)]
+        label = payload.get('label', 'X.com')
+        if not urls:
+            self.x_status_var.set(f'No video links found in {label}.')
+            self._x_log(f'→ nothing video-like found in {label}.')
+            return
+        # Save every scraped video link into the bookmark DB (deduped). They can
+        # then be downloaded with the saved X.com login via "Download saved bookmarks".
+        added = self._add_bookmarks_db([{'url': u, 'site': 'x.com'} for u in urls], source=f'x:{label}')
+        self._refresh_bookmark_counts()
+        self.x_status_var.set(f'Saved {added} new video link(s) from {label} to the bookmark DB '
+                              f'({len(urls) - added} already saved). Click “Download saved bookmarks”.')
+        self._x_log(f'→ saved {added} of {len(urls)} from {label} to the bookmark DB.')
+        # Optionally queue them right away for download too.
+        if getattr(self, 'x_autoqueue_var', None) is not None and self.x_autoqueue_var.get():
+            q = self._queue_urls(urls, at_top=bool(self.x_at_top_var.get()))
+            if q:
+                self._x_log(f'→ also queued {q} for immediate download.')
+                self._pump()
+
+    # ── bookmark DB helpers (scraped links live here, then get downloaded) ──
+    def _add_bookmarks_db(self, items, source=None):
+        added = bulk_db.add_bookmarks(self._db_snapshot(), items, source=source)
+        # add_bookmarks appended to self.bookmarks (same list ref via the snapshot)
+        if added:
+            self._persist_db()
+        return added
+
+    def _refresh_bookmark_counts(self):
+        if hasattr(self, 'x_bm_var'):
+            pend = len(bulk_db.pending_bookmark_urls(self._db_snapshot()))
+            self.x_bm_var.set(f'Bookmark DB: {len(self.bookmarks)} saved · {pend} to download')
+
+    def _download_bookmarks(self):
+        """Queue every saved bookmark link that isn't downloaded yet and start —
+        downloads use the saved cookies.txt (your X.com login)."""
+        pending = bulk_db.pending_bookmark_urls(self._db_snapshot())
+        if not pending:
+            messagebox.showinfo('Nothing to download',
+                                'No new (un-downloaded) bookmark links to fetch.')
+            return
+        added = self._queue_urls(pending, at_top=False)
+        self.status_var.set(f'Queued {added} bookmark link(s) — downloading with your saved login.')
+        self._refresh_bookmark_counts()
+        self.nb.select(self.tab_downloads)
+        self._start_or_pump()
+
+    def _x_handle_following(self, handles):
+        self._x_following = list(handles or [])
+        self.x_status_var.set(f'You follow {len(self._x_following)} account(s). '
+                              'Click “Media from all followed” to pull their videos.')
+        self._x_log(f'Found {len(self._x_following)} followed account(s).')
+        if hasattr(self, 'x_follow_btn'):
+            self.x_follow_btn.configure(state='normal' if self._x_following else 'disabled')
+
+    def _x_on_cookies_saved(self, n):
+        self._config['cookies_from_browser'] = ''       # prefer our fresh cookies.txt for downloads
+        self._save_config()
+        if hasattr(self, 'cookie_status_var'):
+            self.cookie_status_var.set(f'✓ X.com login saved ({n} cookies) — used automatically for downloads.')
+
+    # ════════════════════════════════════════════════════════════════
+    #  X.com browser — dedicated driver thread (Playwright sync API)
+    # ════════════════════════════════════════════════════════════════
+    def _x_loop(self):
+        try:
+            from playwright.sync_api import sync_playwright
+        except Exception as e:
+            self._xpost('x_status', '○ Browser engine not installed — click “Set up browser engine”.')
+            self._xpost('x_log', f'Playwright import failed: {e}')
+            return
+        self._xpost('x_busy', True)
+        self._xpost('x_log', 'Launching private Chromium…')
+        pw = context = page = None
+        try:
+            pw = sync_playwright().start()
+            context = pw.chromium.launch_persistent_context(
+                str(X_PROFILE_DIR), headless=False, no_viewport=True,
+                args=['--disable-blink-features=AutomationControlled'])
+            page = context.pages[0] if context.pages else context.new_page()
+        except Exception as e:
+            msg = str(e)
+            if 'Executable' in msg or "doesn't exist" in msg or 'playwright install' in msg:
+                self._xpost('x_status', '⚠ Chromium missing — click “Set up browser engine”.')
+            else:
+                self._xpost('x_status', '⚠ Could not launch the browser — see Activity log.')
+            self._xpost('x_log', f'Launch failed: {msg}')
+            self._xpost('x_busy', False)
+            try:
+                if pw:
+                    pw.stop()
+            except Exception:
+                pass
+            self._x_thread = None
+            return
+        try:
+            page.goto('https://x.com/home', wait_until='domcontentloaded', timeout=60000)
+        except Exception:
+            pass
+        self._x_after_nav(context, page)
+        self._xpost('x_busy', False)
+
+        while True:
+            cmd = self._x_cmd_q.get()
+            if not cmd or cmd.get('op') == 'quit':
+                break
+            self._xpost('x_busy', True)
+            try:
+                self._x_handle_cmd(cmd, context, page)
+            except Exception as e:
+                self._xpost('x_log', f'Action failed: {e}')
+                self._xpost('x_status', '⚠ Action failed — is the browser window still open? Click Open to relaunch.')
+            finally:
+                self._xpost('x_busy', False)
+
+        try:
+            context.close()
+        except Exception:
+            pass
+        try:
+            pw.stop()
+        except Exception:
+            pass
+        self._x_thread = None
+        self._xpost('x_status', '○ Browser closed.')
+        self._xpost('x_log', 'Browser closed.')
+
+    def _x_handle_cmd(self, cmd, context, page):
+        op = cmd.get('op')
+        if op == 'open':
+            try:
+                page.bring_to_front()
+            except Exception:
+                pass
+            try:
+                page.goto('https://x.com/home', wait_until='domcontentloaded', timeout=60000)
+            except Exception:
+                pass
+            self._x_after_nav(context, page)
+            return
+        if op == 'export':
+            self._x_after_nav(context, page)
+            return
+        if op == 'page':
+            # Generic: scrape any video links on whatever page is currently open
+            # (search results, a list, a profile, a single tweet thread, …).
+            js = _js_video(cmd.get('sensitive', True))
+            urls = self._x_scroll_collect(page, js, cmd.get('cap', 300), 'current page')
+            self._xpost('x_result', {'urls': urls, 'label': 'current page'})
+            self._x_export_cookies(context)
+            return
+        if op == 'following':
+            handle = self._x_require_login(page)
+            if not handle:
+                return
+            self._xpost('x_log', f'Opening @{handle}/following…')
+            page.goto(f'https://x.com/{handle}/following', wait_until='domcontentloaded', timeout=60000)
+            handles = self._x_scroll_collect(page, _JS_FOLLOWING, cmd.get('cap', 2000), 'following')
+            self._xpost('x_following', handles)
+            self._x_export_cookies(context)
+            return
+        if op == 'follow_media':
+            handles = cmd.get('handles') or []
+            per = cmd.get('per', 40)
+            js = _js_video(cmd.get('sensitive', True))
+            collected = []
+            for i, h in enumerate(handles):
+                self._xpost('x_log', f'[{i + 1}/{len(handles)}] @{h} media…')
+                try:
+                    page.goto(f'https://x.com/{h}/media', wait_until='domcontentloaded', timeout=60000)
+                    collected.extend(self._x_scroll_collect(page, js, per, f'@{h}'))
+                except Exception as e:
+                    self._xpost('x_log', f'@{h} failed: {e}')
+            self._xpost('x_result', {'urls': list(dict.fromkeys(collected)),
+                                     'at_top': cmd.get('at_top', False),
+                                     'label': f'{len(handles)} followed profiles'})
+            self._x_export_cookies(context)
+            return
+
+        # likes / bookmarks / handle media
+        cap = cmd.get('cap', 300)
+        js = _js_video(cmd.get('sensitive', True))
+        if op == 'likes':
+            handle = self._x_require_login(page)
+            if not handle:
+                return
+            url, label = f'https://x.com/{handle}/likes', 'likes'
+        elif op == 'bookmarks':
+            url, label = 'https://x.com/i/bookmarks', 'bookmarks'
+        elif op == 'handle':
+            h = (cmd.get('handle') or '').lstrip('@').strip()
+            if not h:
+                self._xpost('x_status', 'Enter a profile @handle first.')
+                return
+            url, label = f'https://x.com/{h}/media', f'@{h}'
+        else:
+            return
+        self._xpost('x_log', f'Opening {label}…')
+        page.goto(url, wait_until='domcontentloaded', timeout=60000)
+        urls = self._x_scroll_collect(page, js, cap, label)
+        self._xpost('x_result', {'urls': urls, 'at_top': cmd.get('at_top', False), 'label': label})
+        self._x_export_cookies(context)
+
+    def _x_after_nav(self, context, page):
+        handle = ''
+        try:
+            page.wait_for_timeout(1800)
+            handle = (page.evaluate(_JS_HANDLE) or '').strip()
+        except Exception:
+            handle = ''
+        self._x_handle_name = handle
+        self._x_export_cookies(context)
+        if handle:
+            self._xpost('x_login', f'@{handle}')
+            self._xpost('x_status', f'✓ Logged in as @{handle}. Login saved for downloads.')
+        else:
+            self._xpost('x_login', 'not logged in')
+            self._xpost('x_status', '○ Sign in to X in the browser window, then click a source.')
+
+    def _x_require_login(self, page):
+        handle = ''
+        try:
+            handle = (page.evaluate(_JS_HANDLE) or '').strip().lstrip('/')
+        except Exception:
+            handle = ''
+        if handle:
+            self._x_handle_name = handle
+            self._xpost('x_login', f'@{handle}')
+        else:
+            self._xpost('x_status', '○ Not logged in — sign in to X in the browser window first.')
+        return handle
+
+    def _x_scroll_collect(self, page, js, cap, label):
+        """Scroll the current timeline, collecting matches until we hit *cap* or the
+        page stops growing (X virtualizes the DOM, so we read before each scroll)."""
+        seen = {}
+        stale = 0
+        last_y = -1
+        loops = 0
+        while len(seen) < cap and stale < 12 and loops < 500:
+            loops += 1
+            try:
+                found = page.evaluate(js) or []
+            except Exception:
+                break
+            added = 0
+            for u in found:
+                if u and u not in seen:
+                    seen[u] = True
+                    added += 1
+                    if len(seen) >= cap:
+                        break
+            self._xpost('x_log', f'  {label}: {len(seen)} found…')
+            try:
+                page.evaluate('window.scrollBy(0, Math.round(window.innerHeight * 0.85))')
+            except Exception:
+                pass
+            page.wait_for_timeout(1200)
+            try:
+                y = page.evaluate('Math.round(window.scrollY)')
+            except Exception:
+                y = last_y
+            stale = stale + 1 if (added == 0 and y == last_y) else 0
+            last_y = y
+        return list(seen)[:cap]
+
+    def _x_export_cookies(self, context):
+        """Write x.com/twitter cookies from the live session to COOKIES_FILE so
+        yt-dlp downloads the gated videos with the same login."""
+        try:
+            cookies = context.cookies()
+        except Exception as e:
+            self._xpost('x_log', f'Could not read cookies: {e}')
+            return
+        now = int(time.time())
+        lines = ['# Netscape HTTP Cookie File', '# Saved by AphroArchive built-in browser', '']
+        n = 0
+        for c in cookies:
+            dom = c.get('domain', '') or ''
+            if 'x.com' not in dom and 'twitter.com' not in dom:
+                continue
+            name = c.get('name', '')
+            if not name:
+                continue
+            flag = 'TRUE' if dom.startswith('.') else 'FALSE'
+            path = c.get('path', '/') or '/'
+            secure = 'TRUE' if c.get('secure') else 'FALSE'
+            try:
+                exp = int(c.get('expires') or 0)
+            except (TypeError, ValueError):
+                exp = 0
+            if exp <= 0:
+                exp = now + 365 * 24 * 3600
+            lines.append('\t'.join([dom, flag, path, secure, str(exp), name, str(c.get('value', ''))]))
+            n += 1
+        if not n:
+            return
+        try:
+            COOKIES_FILE.write_text('\n'.join(lines) + '\n', encoding='utf-8')
+        except OSError as e:
+            self._xpost('x_log', f'Could not write cookies.txt: {e}')
+            return
+        self.out_queue.put(('x_cookies_saved', None, n, None))
 
     def _refresh_cookie_status(self):
         self.cookie_status_var.set(_cookie_status(self._config))
@@ -2434,6 +3274,20 @@ class DownloadManager(tk.Tk):
                     self._handle_autodetect(a)
                 elif kind == 'status_msg':
                     self.status_var.set(a)
+                elif kind == 'x_log':
+                    self._x_log(a)
+                elif kind == 'x_status':
+                    self.x_status_var.set(a)
+                elif kind == 'x_login':
+                    self.x_login_var.set('Login: ' + a)
+                elif kind == 'x_busy':
+                    self._x_set_busy(bool(a))
+                elif kind == 'x_result':
+                    self._x_handle_result(a)
+                elif kind == 'x_following':
+                    self._x_handle_following(a)
+                elif kind == 'x_cookies_saved':
+                    self._x_on_cookies_saved(a)
         except queue.Empty:
             pass
         self._check_timeouts()
@@ -2462,7 +3316,7 @@ class DownloadManager(tk.Tk):
             self._console_log(f'⏸ stopped {url}')
         elif code == 0 and result_file:
             self._set_item(iid, status=ST_DONE, file=result_file, pct=100, speed='', eta='')
-            self._mark_downloaded(url)
+            self._mark_downloaded(url, result_file)
             self._console_log(f'✓ done    {os.path.basename(result_file)}')
         else:
             if timed_out:
@@ -2470,7 +3324,6 @@ class DownloadManager(tk.Tk):
             else:
                 reason = err or 'no downloadable video found'
             self._set_item(iid, status=ST_ERROR, error=reason, speed='', eta='')
-            _append_link(LINKS_FAILED, url)
             self._console_log(f'✗ {"timeout" if timed_out else "error"}   {url}  — {reason}')
         self._rebuild_to_download_file()
         self._update_overall()
@@ -2519,10 +3372,15 @@ class DownloadManager(tk.Tk):
         self._gallery_imgs.append(img)
         self._gallery_thumb_labels[idx].configure(image=img, text='')
 
-    def _mark_downloaded(self, url):
-        _remove_link(LINKS_TO_DOWNLOAD, url)
-        _remove_link(LINKS_FAILED, url)
-        _append_link(LINKS_DOWNLOADED, url, cap=DOWNLOADED_FILE_CAP)
+    def _mark_downloaded(self, url, file=None):
+        """Record a finished download in the persistent registry so it is never
+        re-queued (while its file is present) and so its bookmark shows as done."""
+        self.downloaded[_norm_key(url)] = {'url': url, 'file': file, 'ts': int(time.time())}
+        if len(self.downloaded) > DOWNLOADED_FILE_CAP:
+            stale = sorted(self.downloaded, key=lambda k: self.downloaded[k].get('ts', 0))
+            for k in stale[:len(self.downloaded) - DOWNLOADED_FILE_CAP]:
+                self.downloaded.pop(k, None)
+        self._persist_db()
 
     # ── console drawer ────────────────────────────────────────────────
     def _build_console_drawer(self, body):
@@ -2551,8 +3409,19 @@ class DownloadManager(tk.Tk):
         else:
             self.console_drawer.pack(side='right', fill='y', padx=(6, 0))
             self.console_drawer.pack_propagate(False)
+            self.console_drawer.lift()
             self._console_open = True
             self.console_btn.configure(text='🖥 Console ◂')
+            # Guarantee the window is wide enough to actually show the 440px drawer,
+            # otherwise the notebook's wide columns squeeze it to nothing.
+            try:
+                self.update_idletasks()
+                if self.winfo_width() < 1180:
+                    self.geometry(f'{self.winfo_width() + 470}x{self.winfo_height()}')
+            except tk.TclError:
+                pass
+            if not self.console_text.get('1.0', 'end').strip():
+                self._console_log('🖥 Console ready — download output appears here.')
         self._save_config()
 
     def _clear_console(self):
@@ -2580,6 +3449,8 @@ class DownloadManager(tk.Tk):
             self._refresh_gallery()
         elif sel == str(self.tab_errored):
             self._refresh_errored()
+        elif sel == str(self.tab_bookmarks) and not self.bm_tree.get_children() and self.bookmarks:
+            self._load_saved_bookmarks(announce=False)
 
     # ── config persistence ────────────────────────────────────────────
     def _save_config(self):
@@ -2590,6 +3461,12 @@ class DownloadManager(tk.Tk):
             self._config['autostart'] = bool(self.autostart_var.get())
         if hasattr(self, '_console_open'):
             self._config['console_open'] = bool(self._console_open)
+        for attr, key in (('x_max_var', 'x_max_items'), ('x_per_var', 'x_per_profile')):
+            if hasattr(self, attr):
+                try:
+                    self._config[key] = int(getattr(self, attr).get())
+                except (tk.TclError, ValueError):
+                    pass
         try:
             self._config['last_tab'] = self.nb.index(self.nb.select())
         except (tk.TclError, AttributeError):
@@ -2637,10 +3514,35 @@ class DownloadManager(tk.Tk):
             return
         if item.get('file') and os.path.exists(item['file']):
             self._open_file(item['file'])
+        else:
+            messagebox.showinfo('No file', 'This item has no downloaded file yet.')
+
+    def _q_selected_item(self):
+        sel = self.tree.selection() or self._targets(self.tree)
+        return self.items.get(sel[0]) if sel else None
+
+    def _q_open_file(self):
+        self._open_selected_file()
+
+    def _q_open_folder(self):
+        item = self._q_selected_item()
+        f = item.get('file') if item else None
+        self._open_path(Path(f).parent if (f and os.path.exists(f)) else Path(self.out_dir.get()))
+
+    def _q_open_link(self):
+        item = self._q_selected_item()
+        if item and _is_http(item.get('url', '')):
+            webbrowser.open(item['url'], new=2)
+            self.status_var.set(f"Opened {item['url']} in browser.")
 
     def _on_close(self):
         self.paused = True
         self.is_running = False
+        if self._x_thread and self._x_thread.is_alive() and self._x_cmd_q:
+            try:
+                self._x_cmd_q.put({'op': 'quit'})
+            except Exception:
+                pass
         for proc in list(self.active.values()):
             if proc and proc.poll() is None:
                 try:
