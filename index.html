@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AphroArchive — Bulk Downloader</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f3f4f6; --panel: #fff; --accent: #2563eb; --accent-h: #1d4ed8;
+    --danger: #dc2626; --success: #16a34a; --muted: #6b7280;
+    --border: #d1d5db; --log-bg: #1e1e1e; --log-fg: #d4d4d4;
+    --radius: 8px; --font: system-ui, 'Segoe UI', sans-serif; --mono: 'Consolas', monospace;
+  }
+  body { font-family: var(--font); font-size: 14px; background: var(--bg); color: #111827; min-height: 100vh; }
+  header { padding: 18px 20px 10px; border-bottom: 1px solid var(--border); background: var(--panel); }
+  header h1 { font-size: 18px; font-weight: 700; }
+  header p { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+  .layout { display: grid; grid-template-columns: 1fr 380px; gap: 16px; padding: 16px; max-width: 1300px; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .card h2 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+
+  textarea, input[type=text] {
+    width: 100%; border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; font-family: var(--mono); font-size: 12.5px;
+    background: #fafafa; resize: vertical; outline: none;
+    transition: border-color .15s;
+  }
+  textarea:focus, input[type=text]:focus { border-color: var(--accent); }
+
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+  .row label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+
+  button {
+    padding: 7px 14px; border: none; border-radius: 6px; font-family: var(--font);
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-h); }
+  .btn-primary:disabled { background: #93b4f8; cursor: default; }
+  .btn-stop { background: var(--danger); color: #fff; }
+  .btn-stop:hover { background: #b91c1c; }
+  .btn-stop:disabled { background: #f3a1a1; cursor: default; }
+  .btn-ghost { background: #e5e7eb; color: #374151; }
+  .btn-ghost:hover { background: #d1d5db; }
+
+  .progress-wrap { flex: 1; min-width: 120px; }
+  progress { width: 100%; height: 10px; appearance: none; border-radius: 5px; overflow: hidden; }
+  progress::-webkit-progress-bar { background: #e5e7eb; }
+  progress::-webkit-progress-value { background: var(--accent); }
+  progress::-moz-progress-bar { background: var(--accent); }
+  .pct { font-size: 12px; color: var(--muted); min-width: 34px; text-align: right; }
+
+  .log {
+    background: var(--log-bg); color: var(--log-fg); font-family: var(--mono);
+    font-size: 12px; padding: 10px 12px; border-radius: 6px; height: 220px;
+    overflow-y: auto; line-height: 1.5; margin-top: 10px; white-space: pre-wrap; word-break: break-all;
+  }
+  .log .err { color: #f87171; }
+  .log .ok  { color: #4ade80; }
+  .log .inf { color: #60a5fa; }
+
+  #jobs-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+  #jobs-table th { text-align: left; font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; border-bottom: 1px solid var(--border); padding: 4px 6px; }
+  #jobs-table td { padding: 5px 6px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  #jobs-table tr:last-child td { border-bottom: none; }
+  .status-badge { display: inline-block; padding: 2px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .s-queued  { background: #fef9c3; color: #854d0e; }
+  .s-running { background: #dbeafe; color: #1d4ed8; }
+  .s-done    { background: #dcfce7; color: #15803d; }
+  .s-error   { background: #fee2e2; color: #b91c1c; }
+  .s-paused  { background: #f3f4f6; color: #374151; }
+  .job-url { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+  .job-prog { font-size: 11px; color: var(--muted); }
+
+  .status-bar { padding: 8px 20px; font-size: 13px; color: var(--muted); border-top: 1px solid var(--border); background: var(--panel); position: sticky; bottom: 0; }
+  .empty-state { color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0; }
+
+  .server-row { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .server-row label { font-size: 13px; white-space: nowrap; }
+  .server-row input { flex: 1; font-family: var(--font); font-size: 13px; }
+  #conn-dot { width: 8px; height: 8px; border-radius: 50%; background: #d1d5db; flex-shrink: 0; }
+  #conn-dot.ok { background: var(--success); }
+  #conn-dot.err { background: var(--danger); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📥 AphroArchive — Bulk Downloader</h1>
+  <p>Paste URLs to add them to the AphroArchive download queue.</p>
+</header>
+
+<div class="layout">
+  <!-- Left column -->
+  <div style="display:flex;flex-direction:column;gap:16px;">
+
+    <div class="card">
+      <h2>Server</h2>
+      <div class="server-row">
+        <label for="server-url">URL</label>
+        <input id="server-url" type="text" value="http://localhost:3000" placeholder="http://localhost:3000">
+        <div id="conn-dot" title="Connection status"></div>
+        <button class="btn-ghost" onclick="checkConnection()">Test</button>
+      </div>
+    </div>
+
+    <div class="card" style="flex:1;">
+      <h2>URLs to download</h2>
+      <textarea id="url-input" rows="10" placeholder="Paste one URL per line&#10;https://example.com/video1&#10;https://example.com/video2"></textarea>
+      <div class="row" style="margin-top:10px;">
+        <button class="btn-ghost" onclick="pasteClipboard()">📋 Paste</button>
+        <button class="btn-ghost" onclick="cleanUrls()">🧹 Dedupe</button>
+        <button class="btn-ghost" onclick="clearUrls()">✖ Clear</button>
+        <span id="url-count" style="margin-left:auto;font-size:12px;color:var(--muted);">0 URLs</span>
+      </div>
+
+      <div class="row" style="margin-top:14px;">
+        <label for="category-input" style="white-space:nowrap;">Category</label>
+        <input id="category-input" type="text" style="flex:1;" placeholder="e.g. Movies (optional)">
+      </div>
+
+      <div class="row" style="margin-top:14px;">
+        <button class="btn-primary" id="start-btn" onclick="startDownload()">▶ Add to queue</button>
+        <button class="btn-stop" id="stop-btn" onclick="cancelAll()" disabled>■ Cancel all</button>
+        <div class="progress-wrap">
+          <progress id="dl-progress" value="0" max="1"></progress>
+        </div>
+        <span class="pct" id="dl-pct">—</span>
+      </div>
+
+      <div id="log" class="log"></div>
+    </div>
+
+  </div>
+
+  <!-- Right column: jobs -->
+  <div class="card" style="overflow:auto;max-height:80vh;">
+    <h2 style="display:flex;align-items:center;gap:8px;">
+      Queue
+      <button class="btn-ghost" style="padding:3px 9px;font-size:12px;margin-left:auto;" onclick="refreshJobs()">↻</button>
+    </h2>
+    <div id="jobs-container">
+      <div class="empty-state">No jobs yet</div>
+    </div>
+  </div>
+</div>
+
+<div class="status-bar" id="status-bar">Ready</div>
+
+<script>
+const serverInput = document.getElementById('server-url');
+const urlInput    = document.getElementById('url-input');
+const urlCount    = document.getElementById('url-count');
+const startBtn    = document.getElementById('start-btn');
+const stopBtn     = document.getElementById('stop-btn');
+const progress    = document.getElementById('dl-progress');
+const dlPct       = document.getElementById('dl-pct');
+const logEl       = document.getElementById('log');
+const statusBar   = document.getElementById('status-bar');
+const connDot     = document.getElementById('conn-dot');
+const jobsCont    = document.getElementById('jobs-container');
+
+urlInput.addEventListener('input', updateCount);
+
+function server() { return serverInput.value.replace(/\/$/, ''); }
+
+function updateCount() {
+  const n = getUrls().length;
+  urlCount.textContent = n + ' URL' + (n !== 1 ? 's' : '');
+}
+
+function getUrls() {
+  return urlInput.value.split('\n')
+    .map(l => l.trim())
+    .filter(l => l.startsWith('http://') || l.startsWith('https://'));
+}
+
+async function pasteClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text.trim()) {
+      urlInput.value += (urlInput.value.endsWith('\n') || !urlInput.value ? '' : '\n') + text.trim() + '\n';
+      updateCount();
+    }
+  } catch {
+    log('Could not read clipboard (check permissions)', 'err');
+  }
+}
+
+function cleanUrls() {
+  const seen = new Set(), out = [];
+  for (const u of getUrls()) { if (!seen.has(u)) { seen.add(u); out.push(u); } }
+  urlInput.value = out.join('\n') + (out.length ? '\n' : '');
+  updateCount();
+}
+
+function clearUrls() { urlInput.value = ''; updateCount(); }
+
+function log(text, cls) {
+  const span = document.createElement('span');
+  if (cls) span.className = cls;
+  span.textContent = text + '\n';
+  logEl.appendChild(span);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function setStatus(text) { statusBar.textContent = text; }
+
+async function checkConnection() {
+  try {
+    const r = await fetch(server() + '/api/preload', { signal: AbortSignal.timeout(3000) });
+    if (r.ok) { connDot.className = 'ok'; setStatus('Connected to ' + server()); }
+    else       { connDot.className = 'err'; setStatus('Server returned ' + r.status); }
+  } catch {
+    connDot.className = 'err';
+    setStatus('Cannot reach ' + server());
+  }
+}
+
+async function startDownload() {
+  const urls = getUrls();
+  if (!urls.length) { log('No valid URLs to add.', 'err'); return; }
+  const category = document.getElementById('category-input').value.trim();
+
+  log(`Adding ${urls.length} URL(s) to queue…`, 'inf');
+  setStatus('Sending to server…');
+  startBtn.disabled = true;
+
+  try {
+    const res = await fetch(server() + '/api/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls, category: category || undefined }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const count = data.ids?.length ?? urls.length;
+    log(`✅ ${count} job(s) queued.`, 'ok');
+    setStatus(`${count} job(s) added to queue.`);
+    urlInput.value = '';
+    updateCount();
+    refreshJobs();
+  } catch (e) {
+    log('[error] ' + e.message, 'err');
+    setStatus('Failed to add jobs.');
+  } finally {
+    startBtn.disabled = false;
+  }
+}
+
+async function cancelAll() {
+  try {
+    await fetch(server() + '/api/download/cancel-all', { method: 'POST' });
+    log('Cancelled all running jobs.', 'inf');
+    refreshJobs();
+  } catch (e) {
+    log('[error] ' + e.message, 'err');
+  }
+}
+
+function statusBadge(status) {
+  const map = { queued: 's-queued', running: 's-running', done: 's-done', error: 's-error', paused: 's-paused' };
+  return `<span class="status-badge ${map[status] || ''}">${status}</span>`;
+}
+
+async function refreshJobs() {
+  try {
+    const res = await fetch(server() + '/api/download/jobs');
+    if (!res.ok) return;
+    const jobs = await res.json();
+
+    if (!jobs.length) {
+      jobsCont.innerHTML = '<div class="empty-state">No jobs yet</div>';
+      progress.value = 0; dlPct.textContent = '—';
+      stopBtn.disabled = true;
+      return;
+    }
+
+    const running = jobs.filter(j => j.status === 'running').length;
+    const done    = jobs.filter(j => j.status === 'done').length;
+    const total   = jobs.length;
+
+    progress.max = total;
+    progress.value = done;
+    dlPct.textContent = total ? Math.round(done / total * 100) + '%' : '—';
+    stopBtn.disabled = running === 0;
+
+    const rows = jobs.slice().reverse().map(j => {
+      const url = j.url.length > 40 ? j.url.slice(0, 37) + '…' : j.url;
+      const prog = j.status === 'running' ? `${j.progress ?? 0}%${j.speed ? ' · ' + j.speed : ''}${j.eta ? ' · ' + j.eta : ''}` : '';
+      return `<tr>
+        <td class="job-url" title="${j.url}">${url}</td>
+        <td>${statusBadge(j.status)}</td>
+        <td class="job-prog">${prog}${j.error ? `<span style="color:var(--danger)">${j.error}</span>` : ''}</td>
+        <td>
+          ${j.status !== 'done' && j.status !== 'error'
+            ? `<button class="btn-ghost" style="padding:2px 8px;font-size:11px;" onclick="deleteJob('${j.id}')">✕</button>`
+            : ''}
+        </td>
+      </tr>`;
+    }).join('');
+
+    jobsCont.innerHTML = `<table id="jobs-table">
+      <thead><tr><th>URL</th><th>Status</th><th>Progress</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } catch {}
+}
+
+async function deleteJob(id) {
+  try {
+    await fetch(server() + '/api/download/jobs/' + id, { method: 'DELETE' });
+    refreshJobs();
+  } catch {}
+}
+
+// Poll every 3 seconds
+setInterval(refreshJobs, 3000);
+
+// Init
+checkConnection();
+refreshJobs();
+updateCount();
+</script>
+</body>
+</html>
