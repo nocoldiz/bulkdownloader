@@ -23,7 +23,9 @@ de-duplicate identically no matter how they were added.
   the session is exported as cookies so yt-dlp can fetch gated videos.
 - **X Links** — a dedicated list of everything scraped from the X.com session (kept
   separate from browser bookmarks). Filter, queue, download all pending with your saved
-  login, or remove links you don't want.
+  login, or remove links you don't want. Includes a **Live monitor**: add channel
+  @handles and, while the app is open, their media tabs are polled on an interval — any
+  newly posted video is auto-scraped and auto-downloaded in real time.
 - **Bot-detection bypass** — `curl_cffi` browser impersonation is enabled by default for a
   much higher success rate on Cloudflare / DataDome / PerimeterX-protected sites.
 

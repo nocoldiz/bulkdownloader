@@ -741,6 +741,9 @@ class DownloadManager(tk.Tk):
         self._x_busy = False
         self._x_following = []           # handles collected from "who I follow"
         self._x_handle_name = ''
+        # ── live monitor: channels auto-scraped for new videos while the app runs ──
+        self._x_mon_handles = [h for h in (self._config.get('x_monitor_handles') or [])
+                               if isinstance(h, str) and h.strip()]
 
         # ── parallel download engine state (all mutated on the main thread) ──
         self.active = {}                 # iid -> Popen (or None until launched)
@@ -2141,6 +2144,8 @@ class DownloadManager(tk.Tk):
                              'all pending at once — they use your saved X.com login.',
                   style='Sub.TLabel').pack(anchor='w')
 
+        self._build_xmonitor_panel(parent)
+
         bar = ttk.Frame(parent)
         bar.pack(fill='x', **pad)
         ttk.Button(bar, text='↻ Refresh', command=self._load_xscraped).pack(side='left')
@@ -2189,6 +2194,183 @@ class DownloadManager(tk.Tk):
         self.xs_ctx_menu.add_command(label='⤴ Add to top', command=lambda: self._add_xscraped_to_queue(at_top=True))
         self.xs_ctx_menu.add_command(label='⤵ Add to bottom', command=lambda: self._add_xscraped_to_queue(at_top=False))
         self.xs_ctx_menu.add_command(label='🗑 Remove selected', command=self._remove_xscraped)
+
+    # ── live monitor panel (top of the X Links tab) ──────────────────
+    def _build_xmonitor_panel(self, parent):
+        pad = {'padx': 12, 'pady': 6}
+        panel = ttk.LabelFrame(parent, text='🔴 Live monitor — auto-download new videos as channels post')
+        panel.pack(fill='x', **pad)
+
+        intro = ttk.Frame(panel)
+        intro.pack(fill='x', padx=8, pady=(8, 2))
+        self.xs_mon_enabled_var = tk.BooleanVar(value=bool(self._config.get('x_monitor_enabled')))
+        ttk.Checkbutton(intro, text='Watch these channels while the app is open and auto-download new videos',
+                        variable=self.xs_mon_enabled_var, command=self._xs_mon_toggle).pack(side='left')
+        ttk.Label(intro, text='Check every').pack(side='left', padx=(16, 4))
+        self.xs_mon_interval_var = tk.IntVar(value=int(self._config.get('x_monitor_interval', 120) or 120))
+        ttk.Spinbox(intro, from_=15, to=3600, increment=15, width=5,
+                    textvariable=self.xs_mon_interval_var,
+                    command=self._xs_mon_interval_changed).pack(side='left')
+        ttk.Label(intro, text='sec').pack(side='left', padx=(4, 0))
+        self.xs_mon_status_var = tk.StringVar(value='Idle — add @handles and tick the box above.')
+        ttk.Label(intro, textvariable=self.xs_mon_status_var, style='Count.TLabel').pack(side='right')
+
+        body = ttk.Frame(panel)
+        body.pack(fill='x', padx=8, pady=(2, 8))
+
+        left = ttk.Frame(body)
+        left.pack(side='left', fill='y')
+        addrow = ttk.Frame(left)
+        addrow.pack(fill='x')
+        ttk.Label(addrow, text='@').pack(side='left')
+        self.xs_mon_entry_var = tk.StringVar()
+        e = ttk.Entry(addrow, textvariable=self.xs_mon_entry_var, width=18)
+        e.pack(side='left', padx=(0, 4))
+        e.bind('<Return>', lambda ev: self._xs_mon_add())
+        ttk.Button(addrow, text='➕ Add channel', command=self._xs_mon_add).pack(side='left')
+        ttk.Button(addrow, text='🗑 Remove', command=self._xs_mon_remove).pack(side='left', padx=4)
+
+        lb_wrap = ttk.Frame(left)
+        lb_wrap.pack(fill='x', pady=(4, 0))
+        self.xs_mon_list = tk.Listbox(lb_wrap, height=5, width=26, activestyle='none',
+                                      bg=LOG_BG, fg=LOG_FG, font=FONT_MONO,
+                                      relief='flat', borderwidth=0, highlightthickness=1,
+                                      highlightbackground=BORDER, selectmode='extended')
+        mlsb = ttk.Scrollbar(lb_wrap, command=self.xs_mon_list.yview)
+        self.xs_mon_list.configure(yscrollcommand=mlsb.set)
+        self.xs_mon_list.pack(side='left', fill='both', expand=True)
+        mlsb.pack(side='right', fill='y')
+
+        rightf = ttk.LabelFrame(body, text='Monitor activity')
+        rightf.pack(side='left', fill='both', expand=True, padx=(10, 0))
+        self.xs_mon_log = tk.Text(rightf, height=6, bg=LOG_BG, fg=LOG_FG, font=FONT_MONO,
+                                  wrap='word', relief='flat', borderwidth=0, state='disabled')
+        mlog_sb = ttk.Scrollbar(rightf, command=self.xs_mon_log.yview)
+        self.xs_mon_log.configure(yscrollcommand=mlog_sb.set)
+        self.xs_mon_log.pack(side='left', fill='both', expand=True, padx=6, pady=6)
+        mlog_sb.pack(side='right', fill='y')
+
+        self._xs_mon_refresh_list()
+        # If monitoring was left on, resume it a moment after the window draws.
+        if self.xs_mon_enabled_var.get() and self._x_mon_handles:
+            self.after(1500, self._xs_mon_autostart)
+
+    def _xs_mon_refresh_list(self):
+        if not hasattr(self, 'xs_mon_list'):
+            return
+        self.xs_mon_list.delete(0, 'end')
+        for h in self._x_mon_handles:
+            self.xs_mon_list.insert('end', f'@{h}')
+        n = len(self._x_mon_handles)
+        if hasattr(self, 'xs_mon_status_var') and not self.xs_mon_enabled_var.get():
+            self.xs_mon_status_var.set(f'{n} channel(s) — monitoring off.' if n
+                                       else 'Idle — add @handles and tick the box above.')
+
+    @staticmethod
+    def _clean_handle(raw):
+        """Pull a bare X handle out of an @name or a profile URL."""
+        h = (raw or '').strip()
+        if not h:
+            return ''
+        m = re.search(r'(?:x\.com|twitter\.com)/(@?[A-Za-z0-9_]{1,15})', h)
+        if m:
+            h = m.group(1)
+        h = h.lstrip('@').strip().strip('/')
+        return h if re.fullmatch(r'[A-Za-z0-9_]{1,15}', h) else ''
+
+    def _xs_mon_add(self):
+        added = []
+        for part in re.split(r'[\s,]+', self.xs_mon_entry_var.get()):
+            h = self._clean_handle(part)
+            if h and h.lower() not in {x.lower() for x in self._x_mon_handles}:
+                self._x_mon_handles.append(h)
+                added.append(h)
+        if not added:
+            self.status_var.set('Enter one or more valid @handles to monitor.')
+            return
+        self.xs_mon_entry_var.set('')
+        self._xs_mon_refresh_list()
+        self._save_config()
+        self._xs_mon_push()
+        self.status_var.set(f'Now monitoring {len(self._x_mon_handles)} channel(s).')
+
+    def _xs_mon_remove(self):
+        sel = list(self.xs_mon_list.curselection())
+        if not sel:
+            messagebox.showinfo('Nothing selected', 'Select one or more channels to stop monitoring.')
+            return
+        for i in sorted(sel, reverse=True):
+            if 0 <= i < len(self._x_mon_handles):
+                del self._x_mon_handles[i]
+        self._xs_mon_refresh_list()
+        self._save_config()
+        self._xs_mon_push()
+
+    def _xs_mon_toggle(self):
+        self._save_config()
+        if self.xs_mon_enabled_var.get() and not self._x_mon_handles:
+            self.xs_mon_enabled_var.set(False)
+            messagebox.showinfo('No channels', 'Add at least one @handle before turning the live monitor on.')
+            return
+        self._xs_mon_push()
+
+    def _xs_mon_interval_changed(self):
+        self._save_config()
+        if self.xs_mon_enabled_var.get():
+            self._xs_mon_push()
+
+    def _xs_mon_autostart(self):
+        if self.xs_mon_enabled_var.get() and self._x_mon_handles and self._x_playwright_available():
+            self._xs_mon_push()
+
+    def _xs_mon_push(self):
+        """Send the current monitor settings to the browser driver thread (starting
+        it if monitoring is being turned on)."""
+        enabled = bool(self.xs_mon_enabled_var.get())
+        interval = max(15, int(self.xs_mon_interval_var.get() or 120))
+        handles = list(self._x_mon_handles)
+        cmd = {'op': 'monitor_set', 'enabled': enabled, 'interval': interval, 'handles': handles,
+               'sensitive': bool(getattr(self, 'x_sensitive_var', None) and self.x_sensitive_var.get())}
+        if enabled and handles:
+            if not self._x_require_engine():
+                self.xs_mon_enabled_var.set(False)
+                self._save_config()
+                self._xs_mon_refresh_list()
+                return
+            self.xs_mon_status_var.set(f'Live — watching {len(handles)} channel(s) every {interval}s.')
+            self._x_send(cmd)                      # _x_send starts the browser thread if needed
+        elif self._x_thread and self._x_thread.is_alive() and self._x_cmd_q:
+            self._x_cmd_q.put(cmd)
+
+    def _x_monitor_log(self, line):
+        if not hasattr(self, 'xs_mon_log'):
+            return
+        self.xs_mon_log.configure(state='normal')
+        self.xs_mon_log.insert('end', line + '\n')
+        try:
+            last = int(self.xs_mon_log.index('end-1c').split('.')[0])
+            if last > 400:
+                self.xs_mon_log.delete('1.0', f'{last - 300}.0')
+        except (ValueError, tk.TclError):
+            pass
+        self.xs_mon_log.see('end')
+        self.xs_mon_log.configure(state='disabled')
+
+    def _x_monitor_hit(self, payload):
+        """A monitored channel posted new video(s): save, surface, and auto-download."""
+        handle = payload.get('handle', '')
+        urls = [u for u in (payload.get('urls') or []) if _is_http(u)]
+        if not urls:
+            return
+        self._add_bookmarks_db([{'url': u, 'site': 'x.com'} for u in urls],
+                               source=f'x:@{handle} (live)')
+        self._refresh_bookmark_counts()
+        self._load_xscraped(announce=False)
+        added = self._queue_urls(urls, at_top=True)
+        self._x_monitor_log(f'🔴 @{handle}: {len(urls)} new video(s) — queued {added} for download.')
+        if added:
+            self._start_or_pump()
+        self.status_var.set(f'Live monitor: queued {added} new video(s) from @{handle}.')
 
     @staticmethod
     def _is_x_source(source):
@@ -3131,19 +3313,46 @@ class DownloadManager(tk.Tk):
         self._x_after_nav(context, page)
         self._xpost('x_busy', False)
 
-        while True:
-            cmd = self._x_cmd_q.get()
-            if not cmd or cmd.get('op') == 'quit':
-                break
-            self._xpost('x_busy', True)
-            try:
-                self._x_handle_cmd(cmd, context, page)
-            except Exception as e:
-                self._xpost('x_log', f'Action failed: {e}')
-                self._xpost('x_status', '⚠ Action failed — is the browser window still open? Click Open to relaunch.')
-            finally:
-                self._xpost('x_busy', False)
+        # Live-monitor state (thread-local). 'seen' baselines each channel on its
+        # first check so only videos posted *after* monitoring starts get downloaded.
+        mon = {'enabled': False, 'interval': 120, 'handles': [], 'sensitive': True,
+               'seen': {}, 'last': 0.0, 'page': None}
 
+        while True:
+            try:
+                cmd = self._x_cmd_q.get(timeout=1.0)
+            except queue.Empty:
+                cmd = None
+            if cmd is not None:
+                op = cmd.get('op')
+                if op == 'quit':
+                    break
+                if op == 'monitor_set':
+                    self._x_monitor_configure(mon, cmd)
+                    continue
+                self._xpost('x_busy', True)
+                try:
+                    self._x_handle_cmd(cmd, context, page)
+                except Exception as e:
+                    self._xpost('x_log', f'Action failed: {e}')
+                    self._xpost('x_status', '⚠ Action failed — is the browser window still open? Click Open to relaunch.')
+                finally:
+                    self._xpost('x_busy', False)
+                mon['last'] = time.monotonic()   # don't poll right after a manual action
+                continue
+            # idle tick — run the live monitor if it's due
+            if mon['enabled'] and mon['handles'] and (time.monotonic() - mon['last']) >= mon['interval']:
+                try:
+                    self._x_monitor_sweep(context, mon)
+                except Exception as e:
+                    self._xpost('x_monitor_log', f'monitor sweep failed: {e}')
+                mon['last'] = time.monotonic()
+
+        try:
+            if mon.get('page') and not mon['page'].is_closed():
+                mon['page'].close()
+        except Exception:
+            pass
         try:
             context.close()
         except Exception:
@@ -3230,6 +3439,52 @@ class DownloadManager(tk.Tk):
         page.goto(url, wait_until='domcontentloaded', timeout=60000)
         urls = self._x_scroll_collect(page, js, cap, label)
         self._xpost('x_result', {'urls': urls, 'at_top': cmd.get('at_top', False), 'label': label})
+        self._x_export_cookies(context)
+
+    def _x_monitor_configure(self, mon, cmd):
+        """Apply a monitor_set command on the driver thread (handles, interval, on/off)."""
+        new_handles = [h for h in (cmd.get('handles') or []) if h]
+        mon['enabled'] = bool(cmd.get('enabled'))
+        mon['interval'] = max(15, int(cmd.get('interval', 120) or 120))
+        mon['sensitive'] = bool(cmd.get('sensitive', True))
+        mon['handles'] = new_handles
+        # forget baselines for channels no longer watched
+        keep = {h.lower() for h in new_handles}
+        for h in list(mon['seen']):
+            if h.lower() not in keep:
+                mon['seen'].pop(h, None)
+        if mon['enabled'] and new_handles:
+            self._xpost('x_monitor_log',
+                        f'▶ Live monitor on — {len(new_handles)} channel(s), every {mon["interval"]}s.')
+            mon['last'] = 0.0            # check promptly
+        else:
+            self._xpost('x_monitor_log', '⏹ Live monitor off.')
+
+    def _x_monitor_sweep(self, context, mon):
+        """Check every watched channel's media tab for newly posted videos."""
+        page = mon.get('page')
+        if page is None or page.is_closed():
+            page = context.new_page()
+            mon['page'] = page
+        js = _js_video(mon['sensitive'])
+        for handle in list(mon['handles']):
+            try:
+                page.goto(f'https://x.com/{handle}/media', wait_until='domcontentloaded', timeout=45000)
+                page.wait_for_timeout(2500)
+                found = [u for u in (page.evaluate(js) or []) if u]
+            except Exception as e:
+                self._xpost('x_monitor_log', f'@{handle}: check failed ({e}).')
+                continue
+            seen = mon['seen'].get(handle)
+            if seen is None:
+                mon['seen'][handle] = set(found)
+                self._xpost('x_monitor_log',
+                            f'@{handle}: watching ({len(found)} existing post(s) ignored).')
+                continue
+            new = [u for u in found if u not in seen]
+            seen.update(found)
+            if new:
+                self._xpost('x_monitor_hit', {'handle': handle, 'urls': new})
         self._x_export_cookies(context)
 
     def _x_after_nav(self, context, page):
@@ -3513,6 +3768,12 @@ class DownloadManager(tk.Tk):
                     self._x_handle_following(a)
                 elif kind == 'x_cookies_saved':
                     self._x_on_cookies_saved(a)
+                elif kind == 'x_monitor_log':
+                    self._x_monitor_log(a)
+                elif kind == 'x_monitor_hit':
+                    self._x_monitor_hit(a)
+                elif kind == 'x_monitor_status':
+                    self.xs_mon_status_var.set(a)
         except queue.Empty:
             pass
         self._check_timeouts()
@@ -3688,12 +3949,17 @@ class DownloadManager(tk.Tk):
             self._config['autostart'] = bool(self.autostart_var.get())
         if hasattr(self, '_console_open'):
             self._config['console_open'] = bool(self._console_open)
-        for attr, key in (('x_max_var', 'x_max_items'), ('x_per_var', 'x_per_profile')):
+        for attr, key in (('x_max_var', 'x_max_items'), ('x_per_var', 'x_per_profile'),
+                          ('xs_mon_interval_var', 'x_monitor_interval')):
             if hasattr(self, attr):
                 try:
                     self._config[key] = int(getattr(self, attr).get())
                 except (tk.TclError, ValueError):
                     pass
+        if hasattr(self, 'xs_mon_enabled_var'):
+            self._config['x_monitor_enabled'] = bool(self.xs_mon_enabled_var.get())
+        if hasattr(self, '_x_mon_handles'):
+            self._config['x_monitor_handles'] = list(self._x_mon_handles)
         try:
             self._config['last_tab'] = self.nb.index(self.nb.select())
         except (tk.TclError, AttributeError):
