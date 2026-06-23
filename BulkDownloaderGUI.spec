@@ -1,6 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
 import shutil
+from PyInstaller.utils.hooks import collect_all
+
+# curl_cffi ships a compiled libcurl + cacert bundle, and yt_dlp lazy-loads its
+# extractors as submodules. PyInstaller misses these by default, producing an
+# app that builds fine but crashes at launch with ImportError. Collect them all.
+_dep_datas, _dep_binaries, _dep_hidden = [], [], []
+for _pkg in ('curl_cffi', 'yt_dlp'):
+    _d, _b, _h = collect_all(_pkg)
+    _dep_datas += _d
+    _dep_binaries += _b
+    _dep_hidden += _h
 
 # IMPORTANT: PyInstaller does NOT cross-compile. A macOS .app is only produced
 # when this spec is built ON macOS (run ./build.sh there). Building on Windows
@@ -15,10 +26,10 @@ USE_UPX = not IS_MAC and shutil.which('upx') is not None
 a = Analysis(
     ['src/bulkdownloader_gui.py'],
     pathex=['src'],
-    binaries=[],
+    binaries=_dep_binaries,
     datas=[('src/bulkdownloader.py', '.'), ('src/site_search.py', '.'),
-           ('assets/websites.json', '.'), ('assets/categories.json', '.')],
-    hiddenimports=[],
+           ('assets/websites.json', '.'), ('assets/categories.json', '.')] + _dep_datas,
+    hiddenimports=_dep_hidden,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

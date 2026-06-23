@@ -1,0 +1,84 @@
+name: Build standalone apps
+
+# Build native binaries on real runners (PyInstaller cannot cross-compile).
+# - macOS .app  -> built on macOS runners (Apple Silicon + Intel)
+# - Windows .exe -> built on a Windows runner
+# - Linux binary -> built on an Ubuntu runner
+#
+# Run it manually from the Actions tab (Run workflow), or push a tag like v1.0.0
+# to also publish a GitHub Release with the artifacts attached.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14      # Apple Silicon (arm64)
+            name: macOS-arm64
+          - os: macos-13      # Intel (x86_64)
+            name: macOS-x86_64
+          - os: windows-latest
+            name: Windows
+          - os: ubuntu-latest
+            name: Linux
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install -U pip
+          python -m pip install -U pyinstaller yt-dlp "curl_cffi>=0.7.0" requests
+
+      - name: Build with PyInstaller
+        run: >
+          python -m PyInstaller --clean --noconfirm
+          --distpath ./dist
+          --workpath ./build/bulkdownloader
+          BulkDownloaderGUI.spec
+
+      - name: Package macOS .app
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          cd dist
+          zip -qr "BulkDownloaderGUI-${{ matrix.name }}.zip" BulkDownloaderGUI.app
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BulkDownloaderGUI-${{ matrix.name }}
+          path: |
+            dist/BulkDownloaderGUI-*.zip
+            dist/BulkDownloaderGUI.exe
+            dist/BulkDownloaderGUI
+          if-no-files-found: warn
+
+  release:
+    name: Publish release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*

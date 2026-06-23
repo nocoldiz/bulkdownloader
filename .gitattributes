@@ -1,0 +1,7 @@
+# Keep shell scripts LF so they run on macOS/Linux
+*.sh        text eol=lf
+*.command   text eol=lf
+
+# Keep Windows scripts CRLF
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
