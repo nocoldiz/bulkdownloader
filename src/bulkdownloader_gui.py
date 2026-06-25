@@ -71,6 +71,7 @@ for _p in (str(APP_DIR), str(BUNDLE_DIR)):
         sys.path.insert(0, _p)
 import bulk_db  # noqa: E402
 import categorizer  # noqa: E402  (shared auto-categorize engine, reused by the Categorize tab)
+import chan_scraper  # noqa: E402  (imageboard scraper engine, reused by the Chan tab)
 
 if FROZEN:
     # bulkdownloader.py is bundled as data alongside the frozen exe.
@@ -780,6 +781,12 @@ class DownloadManager(tk.Tk):
         self._cat_gen = 0                # scan generation for the categorize panel
         self._cat_plan = []              # last previewed move plan (list of move dicts)
 
+        self._chan_gen = 0               # scrape generation for the imageboard panel
+        self._chan_media = []            # persistent scraped media rows [{url, source, added_at}]
+        self._chan_iid_by_key = {}       # norm_key(url) -> tree iid, for live status updates
+        self._chan_busy = False
+        self._chan_stop = None           # threading.Event to abort the current scrape
+
         _saved_out = self._config.get('out_dir')
         try:   # migrate the old videos/downloads default to the plain downloads folder
             if _saved_out and Path(_saved_out).resolve() == _LEGACY_OUT_DIR.resolve():
@@ -889,6 +896,7 @@ class DownloadManager(tk.Tk):
         self.tab_duplicates = ttk.Frame(self.nb)
         self.tab_xlogin = ttk.Frame(self.nb)
         self.tab_xscraped = ttk.Frame(self.nb)
+        self.tab_chan = ttk.Frame(self.nb)
 
         self.nb.add(self.tab_downloads, text='⬇ Downloads')
         self.nb.add(self.tab_errored, text='❌ Errored')
@@ -899,6 +907,7 @@ class DownloadManager(tk.Tk):
         self.nb.add(self.tab_duplicates, text='🧬 Duplicates')
         self.nb.add(self.tab_xlogin, text='🔑 X.com')
         self.nb.add(self.tab_xscraped, text='🐦 X Links')
+        self.nb.add(self.tab_chan, text='🧲 Chan')
 
         self._build_downloads_tab(self.tab_downloads)
         self._build_errored_tab(self.tab_errored)
@@ -909,6 +918,7 @@ class DownloadManager(tk.Tk):
         self._build_duplicates_tab(self.tab_duplicates)
         self._build_xlogin_tab(self.tab_xlogin)
         self._build_xscraped_tab(self.tab_xscraped)
+        self._build_chan_tab(self.tab_chan)
 
         self.nb.bind('<<NotebookTabChanged>>', self._on_tab_changed)
 
@@ -1132,6 +1142,9 @@ class DownloadManager(tk.Tk):
         # Reflect any saved category stars into the Categorize tab.
         if hasattr(self, 'cat_tree'):
             self._refresh_cat_tree()
+        # Load the dedicated imageboard media list (source 'chan:…') from the DB.
+        if hasattr(self, 'chan_tree'):
+            self._load_chan_media(announce=False)
         if self._next_pending():
             extra = f' (+{len(fed)} from links_to_download.txt)' if fed else ''
             self.status_var.set(f'Queue loaded.{extra} Press Start to download.')
@@ -1797,6 +1810,24 @@ class DownloadManager(tk.Tk):
         self.cat_info = tk.StringVar(value='Star categories, then Preview a plan.')
         ttk.Label(bar, textvariable=self.cat_info, style='Count.TLabel').pack(side='right')
 
+        # ── Type filter bar ────────────────────────────────────────────
+        type_bar = ttk.Frame(parent)
+        type_bar.pack(fill='x', padx=12, pady=(0, 4))
+        ttk.Label(type_bar, text='Filter by type:', style='Sub.TLabel').pack(side='left', padx=(0, 6))
+        self.cat_type_vars = {}
+        ALL_TYPES = ['nsfw', 'wrestling', 'art', 'gaming', 'music', 'film-tv',
+                     'true-crime', 'literature', 'education', 'technology', 'comedy', 'other']
+        for t in ALL_TYPES:
+            var = tk.BooleanVar(value=True)
+            self.cat_type_vars[t] = var
+            cb = ttk.Checkbutton(type_bar, text=t, variable=var,
+                                 command=self._cat_filter_changed)
+            cb.pack(side='left', padx=2)
+        ttk.Button(type_bar, text='☑ All', width=4,
+                   command=lambda: self._cat_type_set_all(True)).pack(side='left', padx=(6, 1))
+        ttk.Button(type_bar, text='☐ None', width=5,
+                   command=lambda: self._cat_type_set_all(False)).pack(side='left', padx=1)
+
         paned = ttk.PanedWindow(parent, orient='horizontal')
         paned.pack(fill='both', expand=True, **pad)
 
@@ -1842,15 +1873,35 @@ class DownloadManager(tk.Tk):
         stars = max(0, min(int(stars), bulk_db.CATEGORY_MAX_STARS))
         return '★' * stars + '☆' * (bulk_db.CATEGORY_MAX_STARS - stars)
 
+    def _cat_active_types(self):
+        """Return the set of category types whose checkbutton is checked."""
+        if not hasattr(self, 'cat_type_vars'):
+            return None   # no filter built yet → show all
+        active = {t for t, var in self.cat_type_vars.items() if var.get()}
+        return active if active else None  # None means nothing checked → show all
+
+    def _cat_filter_changed(self):
+        self._refresh_cat_tree()
+
+    def _cat_type_set_all(self, on):
+        for var in self.cat_type_vars.values():
+            var.set(on)
+        self._refresh_cat_tree()
+
     def _refresh_cat_tree(self):
         tree = self.cat_tree
         for iid in tree.get_children():
             tree.delete(iid)
         self._cat_names = {}                       # row iid -> category name
+        active_types = self._cat_active_types()
         for i, name in enumerate(sorted(self.categories, key=str.lower)):
             entry = self.categories.get(name) or {}
             if not isinstance(entry, dict):
                 entry = {}
+            # Filter by type if any types are active
+            cat_type = entry.get('type', 'other')
+            if active_types is not None and cat_type not in active_types:
+                continue
             stars = int(entry.get('stars', 0))
             tags  = entry.get('tags', []) or []
             iid = f'c{i}'
@@ -1859,7 +1910,12 @@ class DownloadManager(tk.Tk):
                         values=(self._cat_star_glyph(stars), str(len(tags))))
         starred = sum(1 for e in self.categories.values()
                       if isinstance(e, dict) and int(e.get('stars', 0)) >= 1)
-        self.cat_count.set(f'{len(self.categories)} categories · {starred} starred (folders to create)')
+        shown = len(tree.get_children())
+        total = len(self.categories)
+        if shown < total:
+            self.cat_count.set(f'{shown} / {total} categories · {starred} starred (folders to create)')
+        else:
+            self.cat_count.set(f'{total} categories · {starred} starred (folders to create)')
 
     def _cat_on_click(self, event):
         """Click on the star cell cycles the rating 0→1→2→3→0 and saves to db.json."""
@@ -1992,6 +2048,299 @@ class DownloadManager(tk.Tk):
         self.cat_info.set(msg)
         self._cat_plan = []
         self._cat_preview()        # re-scan so the plan reflects the new layout
+
+    # ════════════════════════════════════════════════════════════════
+    #  Chan tab  ·  imageboard scraper + dedicated live media section
+    # ════════════════════════════════════════════════════════════════
+    def _build_chan_tab(self, parent):
+        pad = {'padx': 12, 'pady': 6}
+        head = ttk.Frame(parent)
+        head.pack(fill='x', **pad)
+        ttk.Label(head, text='Imageboard (chan) scraper', style='Header.TLabel').pack(anchor='w')
+        ttk.Label(head, text='Paste an imageboard thread or board URL — every image and video is downloaded to '
+                             'your download folder and collected in the live list below, tagged with the source '
+                             'site. The list persists across restarts. Works with 4chan / 4channel and most '
+                             'vichan / lynxchan boards.', style='Sub.TLabel').pack(anchor='w')
+
+        inrow = ttk.Frame(parent)
+        inrow.pack(fill='x', **pad)
+        ttk.Label(inrow, text='URL:').pack(side='left')
+        self.chan_url_var = tk.StringVar()
+        entry = ttk.Entry(inrow, textvariable=self.chan_url_var)
+        entry.pack(side='left', fill='x', expand=True, padx=6)
+        entry.bind('<Return>', lambda ev: self._chan_scrape())
+        ttk.Button(inrow, text='📋 Paste', command=self._chan_paste).pack(side='left')
+        self.chan_scrape_btn = ttk.Button(inrow, text='🧲 Scrape & download', style='Accent.TButton',
+                                          command=self._chan_scrape)
+        self.chan_scrape_btn.pack(side='left', padx=6)
+        self.chan_stop_btn = ttk.Button(inrow, text='⏹ Stop', style='Stop.TButton',
+                                        command=self._chan_stop_clicked, state='disabled')
+        self.chan_stop_btn.pack(side='left')
+
+        opt = ttk.Frame(parent)
+        opt.pack(fill='x', **pad)
+        self.chan_images_var = tk.BooleanVar(value=True)
+        self.chan_videos_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(opt, text='Images', variable=self.chan_images_var).pack(side='left')
+        ttk.Checkbutton(opt, text='Videos', variable=self.chan_videos_var).pack(side='left', padx=(10, 0))
+        self.chan_info = tk.StringVar(value='Paste an imageboard link and press Scrape & download.')
+        ttk.Label(opt, textvariable=self.chan_info, style='Count.TLabel').pack(side='right')
+
+        bar = ttk.Frame(parent)
+        bar.pack(fill='x', **pad)
+        ttk.Button(bar, text='↻ Refresh', command=self._load_chan_media).pack(side='left')
+        ttk.Button(bar, text='⬇ Download missing', command=self._chan_download_missing).pack(side='left', padx=6)
+        ttk.Button(bar, text='🗑 Remove', command=self._remove_chan_media).pack(side='left')
+        ttk.Label(bar, text='Filter:').pack(side='left', padx=(12, 2))
+        self.chan_filter_var = tk.StringVar()
+        self.chan_filter_var.trace_add('write', lambda *_: self._refilter_chan_media())
+        ttk.Entry(bar, textvariable=self.chan_filter_var, width=24).pack(side='left')
+        self.chan_count_var = tk.StringVar(value='')
+        ttk.Label(bar, textvariable=self.chan_count_var, style='Count.TLabel').pack(side='right')
+
+        list_panel = ttk.LabelFrame(parent, text='Scraped imageboard media  ·  live · double-click to open · '
+                                                  'tick rows for actions')
+        list_panel.pack(fill='both', expand=True, **pad)
+        li = ttk.Frame(list_panel)
+        li.pack(fill='both', expand=True, padx=8, pady=8)
+        self.chan_tree = ttk.Treeview(li, columns=('chk', 'status', 'source', 'url'),
+                                      show='headings', selectmode='extended')
+        self.chan_tree.heading('status', text='Status')
+        self.chan_tree.heading('source', text='From')
+        self.chan_tree.heading('url', text='Media URL')
+        self.chan_tree.column('chk', width=34, anchor='center', stretch=False)
+        self.chan_tree.column('status', width=92, anchor='center', stretch=False)
+        self.chan_tree.column('source', width=150, stretch=False)
+        self.chan_tree.column('url', width=560, stretch=True)
+        csb = ttk.Scrollbar(li, command=self.chan_tree.yview)
+        self.chan_tree.configure(yscrollcommand=csb.set)
+        self.chan_tree.pack(side='left', fill='both', expand=True)
+        csb.pack(side='right', fill='y')
+        self.chan_tree.tag_configure('downloaded', foreground=SUCCESS)
+        self.chan_tree.tag_configure('fail', foreground=ERROR)
+        self._setup_checktree(self.chan_tree)
+        self.chan_tree.bind('<Double-1>', self._chan_open)
+
+        self._load_chan_media(announce=False)
+
+    @staticmethod
+    def _is_chan_source(source):
+        """True for bookmark records saved by the imageboard scraper (source 'chan:…')."""
+        return isinstance(source, str) and source.startswith('chan:')
+
+    def _load_chan_media(self, announce=True):
+        """Rebuild the dedicated imageboard view from the bookmark DB (source
+        'chan:…' only), newest first. This is the persistent backing store."""
+        rows = []
+        for bm in self.bookmarks:
+            if not self._is_chan_source(bm.get('source')):
+                continue
+            url = bm.get('url', '')
+            if not _is_http(url):
+                continue
+            rows.append({'url': url,
+                         'source': (bm.get('source') or 'chan:')[5:] or 'imageboard',
+                         'added_at': bm.get('added_at') or 0})
+        rows.sort(key=lambda r: r['added_at'], reverse=True)
+        self._chan_media = rows
+        if hasattr(self, 'chan_tree'):
+            self._refilter_chan_media()
+        if announce:
+            self.status_var.set(f'{len(rows)} imageboard media link(s) scraped.')
+
+    def _refilter_chan_media(self):
+        needle = self.chan_filter_var.get().strip().lower()
+        self.chan_tree._checked.clear()
+        for iid in self.chan_tree.get_children():
+            self.chan_tree.delete(iid)
+        self._chan_iid_by_key = {}                 # norm_key(url) -> row iid (for live updates)
+        shown = done = 0
+        for i, row in enumerate(self._chan_media):
+            if needle and needle not in row['url'].lower() and needle not in row['source'].lower():
+                continue
+            is_dl = self._is_downloaded(row['url'])
+            iid = f'cm{i}'
+            self.chan_tree.insert('', 'end', iid=iid,
+                                  values=(CHK_OFF, '✓ saved' if is_dl else '–', row['source'], row['url']),
+                                  tags=('downloaded',) if is_dl else ())
+            self._chan_iid_by_key[_norm_key(row['url'])] = iid
+            shown += 1
+            done += 1 if is_dl else 0
+        total = len(self._chan_media)
+        extra = f' · {done} downloaded' if done else ''
+        self.chan_count_var.set(f'{shown} shown / {total} scraped{extra}' if total
+                                else 'No imageboard media scraped yet — paste a link above.')
+
+    def _chan_paste(self):
+        try:
+            text = self.clipboard_get()
+        except tk.TclError:
+            return
+        first = next((l.strip() for l in text.splitlines() if l.strip()), '')
+        if first:
+            self.chan_url_var.set(first)
+
+    def _chan_scrape(self):
+        if self._chan_busy:
+            return
+        url = self.chan_url_var.get().strip()
+        if not _is_http(url):
+            self.chan_info.set('Enter a valid http(s) imageboard URL.')
+            return
+        if not (self.chan_images_var.get() or self.chan_videos_var.get()):
+            self.chan_info.set('Tick Images and/or Videos to scrape.')
+            return
+        folder = Path(self.out_dir.get())
+        self._chan_busy = True
+        self._chan_stop = threading.Event()
+        self.chan_scrape_btn.configure(state='disabled')
+        self.chan_stop_btn.configure(state='normal')
+        self.chan_info.set('Scraping…')
+        self._chan_gen += 1
+        gen = self._chan_gen
+        wi, wv = self.chan_images_var.get(), self.chan_videos_var.get()
+        threading.Thread(target=self._chan_scrape_thread,
+                         args=(url, wi, wv, folder, gen), daemon=True).start()
+
+    def _chan_scrape_thread(self, url, want_images, want_videos, folder, gen):
+        try:
+            title, media = chan_scraper.scrape_media(url, want_images, want_videos)
+        except Exception as e:                                  # network/parse — report, don't crash
+            self.out_queue.put(('chan_done', gen, (0, 0, f'scrape failed: {e}'), None))
+            return
+        self.out_queue.put(('chan_found', gen, (url, title, media), None))
+        if not media:
+            self.out_queue.put(('chan_done', gen, (0, 0, 'no media found'), None))
+            return
+        self._chan_download_loop(media, folder, url, gen)
+
+    def _chan_download_loop(self, media, folder, referer, gen):
+        """Download each media URL, streaming per-item status back to the UI."""
+        ok = fail = 0
+        for m in media:
+            if self._chan_stop.is_set():
+                self.out_queue.put(('chan_done', gen, (ok, fail, 'stopped'), None))
+                return
+            path = chan_scraper.download_file(m, folder, referer=referer)
+            if path:
+                ok += 1
+                self.out_queue.put(('chan_item', gen, (m, 'done', str(path)), None))
+            else:
+                fail += 1
+                self.out_queue.put(('chan_item', gen, (m, 'fail', ''), None))
+        self.out_queue.put(('chan_done', gen, (ok, fail, ''), None))
+
+    def _handle_chan_found(self, gen, payload):
+        if gen != self._chan_gen:
+            return
+        url, title, media = payload
+        # Save every media link to the bookmark DB (deduped), tagged with the
+        # source site, then surface them in the dedicated live list immediately.
+        host = _host_of(url) or 'imageboard'
+        items = [{'url': u, 'title': title or None, 'site': host} for u in media]
+        added = self._add_bookmarks_db(items, source=f'chan:{host}')
+        self._refresh_bookmark_counts()
+        self._load_chan_media(announce=False)
+        if hasattr(self, 'bm_tree'):
+            self._load_saved_bookmarks(announce=False)
+        if media:
+            self.chan_info.set(f'{len(media)} media found · {added} new in the list · downloading…')
+        else:
+            self.chan_info.set('No media found on that page.')
+
+    def _handle_chan_item(self, gen, payload):
+        if gen != self._chan_gen:
+            return
+        url, status, file = payload
+        if status == 'done' and file:
+            nk = _norm_key(url)
+            self.downloaded[nk] = {'url': url, 'file': file, 'ts': int(time.time())}
+            for bm in self.bookmarks:
+                if _norm_key(bm.get('url', '')) == nk:
+                    bm['downloaded'] = True
+        iid = getattr(self, '_chan_iid_by_key', {}).get(_norm_key(url))
+        if iid:
+            try:
+                self.chan_tree.set(iid, 'status', '✓ saved' if status == 'done' else '✗ failed')
+                self.chan_tree.item(iid, tags=('downloaded',) if status == 'done' else ('fail',))
+            except tk.TclError:
+                pass
+
+    def _handle_chan_done(self, gen, payload):
+        ok, fail, note = payload
+        self._chan_busy = False
+        self.chan_scrape_btn.configure(state='normal')
+        self.chan_stop_btn.configure(state='disabled')
+        self._persist_db()                 # persist the downloaded registry + bookmark flags
+        msg = f'🧲 Done: {ok} downloaded' + (f', {fail} failed' if fail else '')
+        if note:
+            msg += f'  ({note})'
+        self.chan_info.set(msg + '.')
+        self.status_var.set(msg + '.')
+        self._load_chan_media(announce=False)
+        if hasattr(self, 'bm_tree'):
+            self._load_saved_bookmarks(announce=False)
+
+    def _chan_stop_clicked(self):
+        if self._chan_stop:
+            self._chan_stop.set()
+        self.chan_info.set('Stopping after the current file…')
+
+    def _chan_target_urls(self, fallback_all=False):
+        urls = [self.chan_tree.set(iid, 'url') for iid in self._targets(self.chan_tree, fallback_all=fallback_all)]
+        return [u for u in urls if u]
+
+    def _chan_download_missing(self):
+        """Re-download the ticked/all scraped media whose file is missing."""
+        if self._chan_busy:
+            self.chan_info.set('Already busy — wait for the current scrape to finish.')
+            return
+        missing = [u for u in self._chan_target_urls(fallback_all=True) if not self._is_downloaded(u)]
+        if not missing:
+            messagebox.showinfo('Nothing to download', 'Every scraped media file is already on disk.')
+            return
+        folder = Path(self.out_dir.get())
+        self._chan_busy = True
+        self._chan_stop = threading.Event()
+        self.chan_scrape_btn.configure(state='disabled')
+        self.chan_stop_btn.configure(state='normal')
+        self.chan_info.set(f'Downloading {len(missing)} missing file(s)…')
+        self._chan_gen += 1
+        gen = self._chan_gen
+        threading.Thread(target=self._chan_download_loop,
+                         args=(missing, folder, None, gen), daemon=True).start()
+
+    def _remove_chan_media(self):
+        """Drop the ticked/selected media from the dedicated list (and the DB)."""
+        targets = set(self._chan_target_urls(fallback_all=False))
+        if not targets:
+            messagebox.showinfo('Nothing selected', 'Tick or select the media you want to remove from the list.')
+            return
+        keys = {_norm_key(u) for u in targets}
+        before = len(self.bookmarks)
+        self.bookmarks[:] = [bm for bm in self.bookmarks
+                             if not (self._is_chan_source(bm.get('source'))
+                                     and _norm_key(bm.get('url', '')) in keys)]
+        removed = before - len(self.bookmarks)
+        if removed:
+            self._persist_db()
+            self._refresh_bookmark_counts()
+        self._load_chan_media(announce=False)
+        self.status_var.set(f'Removed {removed} imageboard media link(s) from the list.')
+
+    def _chan_open(self, event):
+        iid = self.chan_tree.identify_row(event.y)
+        if not iid:
+            return
+        url = self.chan_tree.set(iid, 'url')
+        if not url:
+            return
+        rec = self.downloaded.get(_norm_key(url))
+        f = rec.get('file') if rec else None
+        if f and os.path.exists(f):
+            self._open_file(f)
+        else:
+            webbrowser.open(url, new=2)
 
     # ════════════════════════════════════════════════════════════════
     #  Duplicates tab
@@ -3990,6 +4339,12 @@ class DownloadManager(tk.Tk):
                     self._handle_cat_plan(iid, a)
                 elif kind == 'cat_applied':
                     self._handle_cat_applied(a)
+                elif kind == 'chan_found':
+                    self._handle_chan_found(iid, a)
+                elif kind == 'chan_item':
+                    self._handle_chan_item(iid, a)
+                elif kind == 'chan_done':
+                    self._handle_chan_done(iid, a)
                 elif kind == 'autodetect':
                     self._handle_autodetect(a)
                 elif kind == 'status_msg':

@@ -7,7 +7,8 @@
       "Mexico",
       "TripleMania",
       "Vikingo"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Action": {
     "displayName": "Action",
@@ -21,7 +22,8 @@
       "martial arts",
       "heist",
       "spy"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Adventure": {
     "displayName": "Adventure",
@@ -29,7 +31,8 @@
       "adventure",
       "quest",
       "epic"
-    ]
+    ],
+    "type": "film-tv"
   },
   "AEW Collision": {
     "displayName": "AEW Collision",
@@ -39,7 +42,8 @@
       "Saturday",
       "TNT",
       "Weekly"
-    ]
+    ],
+    "type": "wrestling"
   },
   "AEW Dynamite": {
     "displayName": "AEW Dynamite",
@@ -50,7 +54,8 @@
       "TNT",
       "TBS",
       "Weekly"
-    ]
+    ],
+    "type": "wrestling"
   },
   "AEW Rampage": {
     "displayName": "AEW Rampage",
@@ -60,7 +65,8 @@
       "Friday",
       "TNT",
       "Weekly"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Aftercare": {
     "displayName": "Aftercare",
@@ -72,7 +78,8 @@
       "Reassurance",
       "Blanket Wrap",
       "Hydration Care"
-    ]
+    ],
+    "type": "nsfw"
   },
   "AI": {
     "displayName": "AI & Machine Learning",
@@ -83,7 +90,8 @@
       "research",
       "neural",
       "neural networks"
-    ]
+    ],
+    "type": "education"
   },
   "Amateur": {
     "displayName": "Amateur",
@@ -96,7 +104,8 @@
       "Self Recorded",
       "First Time",
       "Webcam Amateur"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Anal": {
     "displayName": "Anal",
@@ -110,7 +119,8 @@
       "Prostate Play",
       "Anal Training",
       "Double Anal"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Analog Horror": {
     "displayName": "Analog Horror",
@@ -118,7 +128,8 @@
       "analog",
       "vhs",
       "horror"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Animation": {
     "displayName": "Animation",
@@ -127,7 +138,8 @@
       "2d",
       "3d",
       "motion"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Anime": {
     "displayName": "Anime",
@@ -138,7 +150,8 @@
       "Shoujo",
       "Mecha",
       "Isekai"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Anthology": {
     "displayName": "Anthology",
@@ -149,7 +162,8 @@
       "Episodic",
       "Short Story",
       "Diverse"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Armpit": {
     "displayName": "Armpit",
@@ -160,7 +174,8 @@
       "Armpit Worship",
       "Sweaty Armpits",
       "Armpit Sniffing"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Art History": {
     "displayName": "Art History",
@@ -173,7 +188,8 @@
       "renaissance",
       "baroque",
       "modernism"
-    ]
+    ],
+    "type": "art"
   },
   "Artistic": {
     "displayName": "Artistic",
@@ -185,7 +201,8 @@
       "Sensual Posing",
       "Artistic Nude",
       "Erotic Lighting"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Asian": {
     "displayName": "Asian",
@@ -195,7 +212,8 @@
       "JAV Style",
       "Asian Beauty",
       "Exotic Asian"
-    ]
+    ],
+    "type": "nsfw"
   },
   "ASMR": {
     "displayName": "ASMR",
@@ -209,7 +227,8 @@
       "Gentle Domination",
       "Breathing Sounds",
       "Trigger Words"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Ass To Mouth": {
     "displayName": "Ass To Mouth",
@@ -218,7 +237,8 @@
       "Ass To Mouth",
       "A2M",
       "Dirty ATM"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Ass Worship": {
     "displayName": "Ass Worship",
@@ -230,7 +250,8 @@
       "Ass Eating",
       "Facesitting Ass",
       "Ass Smothering"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Astronomy": {
     "displayName": "Astronomy",
@@ -238,7 +259,8 @@
       "space",
       "cosmos",
       "planets"
-    ]
+    ],
+    "type": "education"
   },
   "Australian": {
     "displayName": "Australian",
@@ -246,7 +268,8 @@
       "Aussie",
       "Australian Girl",
       "Down Under"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Babysitter": {
     "displayName": "Babysitter",
@@ -254,7 +277,8 @@
       "Babysitter Fantasy",
       "Sitter Seduction",
       "Teen Babysitter"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Bald": {
     "displayName": "Bald",
@@ -264,7 +288,8 @@
       "Bald Pussy",
       "Hairless",
       "Smooth Bald"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Bareback": {
     "displayName": "Bareback",
@@ -274,7 +299,8 @@
       "Unprotected",
       "Creampie Bareback",
       "Risky Sex"
-    ]
+    ],
+    "type": "nsfw"
   },
   "BBW": {
     "displayName": "BBW",
@@ -284,7 +310,8 @@
       "SSBBW",
       "Curvy BBW",
       "Fat Admiration"
-    ]
+    ],
+    "type": "nsfw"
   },
   "BDSM": {
     "displayName": "BDSM",
@@ -295,7 +322,8 @@
       "Sadomasochism",
       "Power Exchange",
       "Dungeon Play"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Beach": {
     "displayName": "Beach",
@@ -305,7 +333,8 @@
       "Sand Sex",
       "Outdoor Beach",
       "Bikini Beach"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Bear": {
     "displayName": "Bear",
@@ -319,7 +348,8 @@
       "Cub",
       "Bear Cub",
       "Chubby Bear"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Big Ass": {
     "displayName": "Big Ass",
@@ -331,7 +361,8 @@
       "Thick Ass",
       "Booty Clap",
       "Ass Jiggling"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Big Dick": {
     "displayName": "Big Dick",
@@ -342,7 +373,8 @@
       "BBC",
       "Monster Cock",
       "Long Dick"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Big Tits": {
     "displayName": "Big Tits",
@@ -354,7 +386,8 @@
       "Natural Big Tits",
       "Fake Tits",
       "Tit Play"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Biology": {
     "displayName": "Biology",
@@ -362,7 +395,8 @@
       "cells",
       "evolution",
       "genetics"
-    ]
+    ],
+    "type": "education"
   },
   "Bisexual": {
     "displayName": "Bisexual",
@@ -372,7 +406,8 @@
       "Bi Curious",
       "MMF Bi",
       "FFM Bi"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Blonde": {
     "displayName": "Blonde",
@@ -380,7 +415,8 @@
       "Blonde Hair",
       "Blonde Bombshell",
       "Platinum Blonde"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Bondage": {
     "displayName": "Bondage",
@@ -392,7 +428,8 @@
       "Cuffs",
       "Hogtie",
       "Bondage Sex"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Book Reviews": {
     "displayName": "Book Reviews",
@@ -400,7 +437,8 @@
       "review",
       "recommendation",
       "critique"
-    ]
+    ],
+    "type": "literature"
   },
   "Boss": {
     "displayName": "Boss",
@@ -409,7 +447,8 @@
       "Office Dom",
       "Secretary Boss",
       "Power Boss"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Brat": {
     "displayName": "Brat",
@@ -418,7 +457,8 @@
       "Spoiled Brat",
       "Brat Taming",
       "Sassy Sub"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Brazilian": {
     "displayName": "Brazilian",
@@ -426,7 +466,8 @@
       "Brazilian Girl",
       "Brazilian Ass",
       "Latina Brazilian"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Breeding": {
     "displayName": "Breeding",
@@ -436,7 +477,8 @@
       "Breeding Fantasy",
       "Risky Breeding",
       "Fertile Breeding"
-    ]
+    ],
+    "type": "nsfw"
   },
   "British": {
     "displayName": "British",
@@ -445,7 +487,8 @@
       "Uk",
       "British Accent",
       "English Girl"
-    ]
+    ],
+    "type": "nsfw"
   },
   "British Wrestling": {
     "displayName": "British Wrestling",
@@ -457,7 +500,8 @@
       "British",
       "wXw",
       "OTT"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Bukkake": {
     "displayName": "Bukkake",
@@ -466,7 +510,8 @@
       "Cum Bath",
       "Multiple Cumshots",
       "Bukkake Facial"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Bush": {
     "displayName": "Bush",
@@ -476,7 +521,8 @@
       "Natural Bush",
       "Unshaven",
       "Hairy Bush"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Calligraphy": {
     "displayName": "Calligraphy",
@@ -484,7 +530,8 @@
       "lettering",
       "typography",
       "ink"
-    ]
+    ],
+    "type": "art"
   },
   "Car": {
     "displayName": "Car",
@@ -494,7 +541,8 @@
       "Driving Sex",
       "Public Car",
       "Backseat Fuck"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Casting": {
     "displayName": "Casting",
@@ -503,7 +551,8 @@
       "Audition",
       "Fake Audition",
       "Casting Call"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Celebrity": {
     "displayName": "Celebrity",
@@ -512,7 +561,8 @@
       "Famous",
       "Celebrity Lookalike",
       "Fake Celebrity"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Chastity": {
     "displayName": "Chastity",
@@ -522,7 +572,8 @@
       "Locked Cock",
       "Chastity Play",
       "Denied Orgasm"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Cheerleader": {
     "displayName": "Cheerleader",
@@ -530,7 +581,8 @@
       "Cheerleader Fantasy",
       "Pom Pom Girl",
       "Uniform Cheerleader"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Chemistry": {
     "displayName": "Chemistry",
@@ -538,7 +590,8 @@
       "reactions",
       "elements",
       "lab"
-    ]
+    ],
+    "type": "education"
   },
   "Chinese": {
     "displayName": "Chinese",
@@ -548,7 +601,8 @@
       "Chinese Guy",
       "Mandarin",
       "China"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Chubby": {
     "displayName": "Chubby",
@@ -557,7 +611,8 @@
       "Plump",
       "Chubby Girl",
       "Soft Body"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Classic": {
     "displayName": "Classic & Vintage Wrestling",
@@ -569,7 +624,8 @@
       "Attitude Era",
       "Golden Age",
       "Vintage"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Classical": {
     "displayName": "Classical",
@@ -577,7 +633,8 @@
       "classical",
       "orchestra",
       "symphony"
-    ]
+    ],
+    "type": "music"
   },
   "Classics": {
     "displayName": "Classics",
@@ -585,7 +642,8 @@
       "classic",
       "canon",
       "literature"
-    ]
+    ],
+    "type": "literature"
   },
   "CMLL": {
     "displayName": "CMLL Lucha Libre",
@@ -595,7 +653,8 @@
       "Mexico",
       "Arena Mexico",
       "Friday"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Cold Cases": {
     "displayName": "Cold Cases & Unsolved",
@@ -606,7 +665,8 @@
       "mystery",
       "reopened",
       "evidence"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Collabs": {
     "displayName": "Collabs",
@@ -615,7 +675,8 @@
       "joint",
       "tennis",
       "community"
-    ]
+    ],
+    "type": "other"
   },
   "Collar": {
     "displayName": "Collar",
@@ -624,7 +685,8 @@
       "Ownership",
       "Pet Collar",
       "Leash And Collar"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Colombian": {
     "displayName": "Colombian",
@@ -633,7 +695,8 @@
       "Colombiano",
       "Colombian Girl",
       "Colombian Guy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Comedy": {
     "displayName": "Comedy",
@@ -645,7 +708,8 @@
       "Laughter",
       "Sitcom",
       "rom-com"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Concept Art": {
     "displayName": "Concept Art",
@@ -653,7 +717,8 @@
       "concept",
       "design",
       "environment"
-    ]
+    ],
+    "type": "art"
   },
   "Cosplay": {
     "displayName": "Cosplay",
@@ -663,7 +728,8 @@
       "Anime Cosplay",
       "Comic Cosplay",
       "Character Fuck"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Country": {
     "displayName": "Country",
@@ -671,7 +737,8 @@
       "country",
       "folk",
       "americana"
-    ]
+    ],
+    "type": "music"
   },
   "Couple": {
     "displayName": "Couple",
@@ -680,7 +747,8 @@
       "Partner Play",
       "Real Couple",
       "Amateur Couple"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Court Cases": {
     "displayName": "Court Cases & Trials",
@@ -690,7 +758,8 @@
       "verdict",
       "testimony",
       "law"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Crafts": {
     "displayName": "Crafts & DIY",
@@ -700,7 +769,8 @@
       "handmade",
       "mixed media",
       "ceramics"
-    ]
+    ],
+    "type": "art"
   },
   "Creampie": {
     "displayName": "Creampie",
@@ -710,7 +780,8 @@
       "Cum Inside",
       "Pussy Creampie",
       "Dripping Creampie"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Creepypasta": {
     "displayName": "Creepypasta",
@@ -718,7 +789,8 @@
       "creepypasta",
       "horror",
       "analog"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Crime": {
     "displayName": "Crime",
@@ -726,7 +798,8 @@
       "crime",
       "heist",
       "gangster"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Crossdresser": {
     "displayName": "Crossdresser",
@@ -735,7 +808,8 @@
       "Cd",
       "Sissy Crossdresser",
       "Dressed Up"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Cuban": {
     "displayName": "Cuban",
@@ -744,7 +818,8 @@
       "Cubano",
       "Cuban Girl",
       "Cuban Guy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Cuckold": {
     "displayName": "Cuckold",
@@ -754,7 +829,8 @@
       "Hotwife Cuckold",
       "Watching Wife",
       "Bull Cuckold"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Cuddle": {
     "displayName": "Cuddle",
@@ -763,7 +839,8 @@
       "Snuggling",
       "Intimate Cuddle",
       "Post Orgasm Cuddle"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Cum": {
     "displayName": "Cum",
@@ -774,7 +851,8 @@
       "Cum Play",
       "Cum Eating",
       "Cum Covered"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Cumshot": {
     "displayName": "Cumshot",
@@ -784,7 +862,8 @@
       "Facial Cumshot",
       "Body Cumshot",
       "Cum Explosion"
-    ]
+    ],
+    "type": "nsfw"
   },
   "CumSwap": {
     "displayName": "Cum Swap",
@@ -793,7 +872,8 @@
       "Snowballing",
       "Kiss With Cum",
       "Cum Kiss"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Curvy": {
     "displayName": "Curvy",
@@ -802,7 +882,8 @@
       "Voluptuous",
       "Hourglass Figure",
       "Curvy Hips"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Cyberpunk": {
     "displayName": "Cyberpunk",
@@ -813,7 +894,8 @@
       "Megacorporation",
       "Cybernetics",
       "Underground"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Cybersecurity": {
     "displayName": "Cybersecurity",
@@ -821,7 +903,8 @@
       "security",
       "hacking",
       "infosec"
-    ]
+    ],
+    "type": "technology"
   },
   "Daddies": {
     "displayName": "Daddies",
@@ -831,7 +914,8 @@
       "Silver Daddy",
       "Daddy Son",
       "Mature Gay Daddy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Daddy": {
     "displayName": "Daddy",
@@ -840,7 +924,8 @@
       "Father Figure",
       "Daddy Kink",
       "Calling Daddy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Data Science": {
     "displayName": "Data Science",
@@ -848,7 +933,8 @@
       "data",
       "ml",
       "analytics"
-    ]
+    ],
+    "type": "education"
   },
   "Deepthroat": {
     "displayName": "Deepthroat",
@@ -858,7 +944,8 @@
       "Throat Fucking",
       "Gagging Deepthroat",
       "Throat Bulge"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Denial": {
     "displayName": "Denial",
@@ -867,7 +954,8 @@
       "Edging Denial",
       "Ruined Orgasm",
       "Tease Denial"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Digital Art": {
     "displayName": "Digital Art",
@@ -879,7 +967,8 @@
       "pixel",
       "krita",
       "speedpaint"
-    ]
+    ],
+    "type": "art"
   },
   "Disappearances": {
     "displayName": "Disappearances",
@@ -887,7 +976,8 @@
       "missing",
       "unsolved",
       "investigation"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Discipline": {
     "displayName": "Discipline",
@@ -895,7 +985,8 @@
       "Punishment Play",
       "Spanking Discipline",
       "Obedience Training"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Doctor": {
     "displayName": "Doctor",
@@ -904,7 +995,8 @@
       "Exam Play",
       "Doctor Patient",
       "Medical Fetish"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Documentaries": {
     "displayName": "Documentaries",
@@ -918,7 +1010,8 @@
       "Behind the Scenes",
       "Biography",
       "Podcast"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Documentary": {
     "displayName": "Documentary",
@@ -926,7 +1019,8 @@
       "documentary",
       "nonfiction",
       "true story"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Docuseries": {
     "displayName": "Docuseries",
@@ -937,7 +1031,8 @@
       "Nature",
       "Biography",
       "Educational"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Dom": {
     "displayName": "Dom",
@@ -946,7 +1041,8 @@
       "Top",
       "Male Dom",
       "Dom Daddy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Double Penetration": {
     "displayName": "Double Penetration",
@@ -955,7 +1051,8 @@
       "Double Stuffed",
       "Two Holes",
       "Anal Vaginal DP"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Drama": {
     "displayName": "Drama",
@@ -968,7 +1065,8 @@
       "Tragedy",
       "coming of age",
       "biopic"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Drawing": {
     "displayName": "Drawing & Sketching",
@@ -980,7 +1078,8 @@
       "charcoal",
       "sketch",
       "graphite"
-    ]
+    ],
+    "type": "art"
   },
   "Ebony": {
     "displayName": "Ebony",
@@ -989,7 +1088,8 @@
       "Dark Skin",
       "Ebony Girl",
       "BBC Ebony"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Economics": {
     "displayName": "Economics",
@@ -997,7 +1097,8 @@
       "economy",
       "finance",
       "markets"
-    ]
+    ],
+    "type": "education"
   },
   "Edging": {
     "displayName": "Edging",
@@ -1006,7 +1107,8 @@
       "Tease And Denial",
       "Edging JOI",
       "Prolonged Edging"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Editing Tutorials": {
     "displayName": "Editing Tutorials",
@@ -1014,7 +1116,8 @@
       "tutorial",
       "vegas",
       "editing"
-    ]
+    ],
+    "type": "technology"
   },
   "Electronic": {
     "displayName": "Electronic Dance Music",
@@ -1027,7 +1130,8 @@
       "Techno",
       "dnb",
       "ambient"
-    ]
+    ],
+    "type": "music"
   },
   "Elf": {
     "displayName": "Elf",
@@ -1035,7 +1139,8 @@
       "Elf Fantasy",
       "Fantasy Elf",
       "Pointy Ears"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Engineering": {
     "displayName": "Engineering",
@@ -1043,7 +1148,8 @@
       "mechanical",
       "civil",
       "electrical"
-    ]
+    ],
+    "type": "education"
   },
   "Esports": {
     "displayName": "Esports",
@@ -1051,7 +1157,8 @@
       "competitive",
       "tournament",
       "pro"
-    ]
+    ],
+    "type": "gaming"
   },
   "Exam": {
     "displayName": "Exam",
@@ -1059,7 +1166,8 @@
       "Medical Exam",
       "Gyno Exam",
       "Physical Exam"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Facesitting": {
     "displayName": "Facesitting",
@@ -1068,7 +1176,8 @@
       "Queening",
       "Ass Smother",
       "Pussy Smother"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Facial": {
     "displayName": "Facial",
@@ -1076,7 +1185,8 @@
       "Cum On Face",
       "Facial Cumshot",
       "Cum Facial"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Fantasy": {
     "displayName": "Fantasy",
@@ -1095,7 +1205,8 @@
       "Quest",
       "Sword",
       "Sorcery"
-    ]
+    ],
+    "type": "other"
   },
   "Feet": {
     "displayName": "Feet",
@@ -1105,7 +1216,8 @@
       "Foot Worship",
       "Toes Sucking",
       "Foot Licking"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Femboy": {
     "displayName": "Femboy",
@@ -1114,7 +1226,8 @@
       "Trap",
       "Femboy Ass",
       "Cute Femboy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Femdom": {
     "displayName": "Femdom",
@@ -1124,7 +1237,8 @@
       "Dominatrix",
       "Femdom JOI",
       "Pegging Femdom"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Fetish": {
     "displayName": "Fetish",
@@ -1132,7 +1246,8 @@
       "Kink",
       "Special Fetish",
       "Unusual Fetish"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Fiction": {
     "displayName": "Fiction",
@@ -1142,14 +1257,16 @@
       "contemporary",
       "novel",
       "short story"
-    ]
+    ],
+    "type": "literature"
   },
   "Filipina": {
     "displayName": "Filipina",
     "tags": [
       "Pinay",
       "Filipina Girl"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Findom": {
     "displayName": "Findom",
@@ -1158,7 +1275,8 @@
       "Pay Pig",
       "Wallet Drain",
       "Money Domme"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Fisting": {
     "displayName": "Fisting",
@@ -1167,7 +1285,8 @@
       "Deep Fisting",
       "Vaginal Fisting",
       "Anal Fisting"
-    ]
+    ],
+    "type": "nsfw"
   },
   "FoodPlay": {
     "displayName": "FoodPlay",
@@ -1176,7 +1295,8 @@
       "Wet And Messy",
       "Food Insertion",
       "Whipped Cream Play"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Footjob": {
     "displayName": "Footjob",
@@ -1184,7 +1304,8 @@
       "Foot Job",
       "Feet Fucking",
       "Toe Job"
-    ]
+    ],
+    "type": "nsfw"
   },
   "ForcedBi": {
     "displayName": "Forced Bi",
@@ -1192,7 +1313,8 @@
       "Forced Bisexual",
       "Bi Encouragement",
       "Make Him Suck"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Forensics": {
     "displayName": "Forensics & Psychology",
@@ -1203,7 +1325,8 @@
       "behaviour",
       "dna",
       "autopsy"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Found Footage": {
     "displayName": "Found Footage & Analog Horror",
@@ -1212,7 +1335,8 @@
       "analog horror",
       "vhs",
       "tape"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Foursome": {
     "displayName": "Foursome",
@@ -1220,7 +1344,8 @@
       "Group Of Four",
       "FFMM",
       "MMFF"
-    ]
+    ],
+    "type": "nsfw"
   },
   "French": {
     "displayName": "French",
@@ -1228,7 +1353,8 @@
       "French Girl",
       "French Kiss",
       "Parisian"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Furry": {
     "displayName": "Furry",
@@ -1237,7 +1363,8 @@
       "Anthro",
       "Fursuit Sex",
       "Animal Ears"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Futanari": {
     "displayName": "Futanari",
@@ -1246,7 +1373,8 @@
       "Dickgirl",
       "Futanari Cock",
       "Hermaphrodite"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Gadgets": {
     "displayName": "Gadgets",
@@ -1254,7 +1382,8 @@
       "gadgets",
       "unboxing",
       "review"
-    ]
+    ],
+    "type": "technology"
   },
   "Gag": {
     "displayName": "Gag",
@@ -1262,7 +1391,8 @@
       "Ball Gag",
       "Mouth Gag",
       "Gagged And Bound"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Game Design": {
     "displayName": "Game Design",
@@ -1270,7 +1400,8 @@
       "design",
       "gamedev",
       "analysis"
-    ]
+    ],
+    "type": "gaming"
   },
   "Gay": {
     "displayName": "Gay",
@@ -1279,7 +1410,8 @@
       "Gay Sex",
       "Twink Gay",
       "Bear Gay"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Gay Group": {
     "displayName": "Gay Group",
@@ -1289,14 +1421,16 @@
       "Multiple Gay",
       "Gay Group Sex",
       "Gay Party"
-    ]
+    ],
+    "type": "nsfw"
   },
   "German": {
     "displayName": "German",
     "tags": [
       "German Girl",
       "German Accent"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Giantess": {
     "displayName": "Giantess",
@@ -1305,7 +1439,8 @@
       "Macrophilia",
       "Giantess Vore",
       "Size Difference"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Gloryhole": {
     "displayName": "Gloryhole",
@@ -1313,7 +1448,8 @@
       "Glory Hole",
       "Anonymous Sex",
       "Wall Fuck"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Gooning": {
     "displayName": "Gooning",
@@ -1322,7 +1458,8 @@
       "Gooner",
       "Edge Gooning",
       "Porn Addiction"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Grinding": {
     "displayName": "Grinding",
@@ -1330,7 +1467,8 @@
       "Dry Humping",
       "Lap Grinding",
       "Clothed Grinding"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Handjob": {
     "displayName": "Handjob",
@@ -1339,7 +1477,8 @@
       "HJ",
       "Oiled Handjob",
       "Edging Handjob"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Hardcore / Deathmatch": {
     "displayName": "Hardcore / Deathmatch",
@@ -1347,7 +1486,8 @@
       "hardcore",
       "deathmatch",
       "extreme"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Hardware": {
     "displayName": "Hardware",
@@ -1360,7 +1500,8 @@
       "gpu",
       "benchmarks",
       "pc build"
-    ]
+    ],
+    "type": "technology"
   },
   "Heists": {
     "displayName": "Heists",
@@ -1368,7 +1509,8 @@
       "heist",
       "robbery",
       "fraud"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Hentai": {
     "displayName": "Hentai",
@@ -1378,7 +1520,8 @@
       "Tentacle Hentai",
       "3D Hentai",
       "Ahegao"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Hip Hop": {
     "displayName": "Hip Hop & Rap",
@@ -1393,7 +1536,8 @@
       "trap",
       "boom bap",
       "drill"
-    ]
+    ],
+    "type": "music"
   },
   "History": {
     "displayName": "History",
@@ -1405,7 +1549,8 @@
       "biography",
       "world war",
       "civilization"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Horror": {
     "displayName": "Horror Games",
@@ -1424,7 +1569,8 @@
       "found footage",
       "folk horror",
       "zombie"
-    ]
+    ],
+    "type": "gaming"
   },
   "Hotwife": {
     "displayName": "Hotwife",
@@ -1432,7 +1578,8 @@
       "Hot Wife",
       "Shared Wife",
       "Wife Sharing"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Humiliation": {
     "displayName": "Humiliation",
@@ -1442,7 +1589,8 @@
       "Small Penis Humiliation",
       "SPH",
       "Public Humiliation"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Iceberg": {
     "displayName": "Iceberg",
@@ -1450,7 +1598,8 @@
       "iceberg",
       "mystery",
       "deep dive"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Impact": {
     "displayName": "Impact",
@@ -1459,7 +1608,8 @@
       "Whipping",
       "Caning",
       "Flogging"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Impact Wrestling": {
     "displayName": "Impact Wrestling / TNA",
@@ -1469,7 +1619,8 @@
       "Total Nonstop Action",
       "X Division",
       "Knockouts"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Independent": {
     "displayName": "Independent Wrestling",
@@ -1480,7 +1631,8 @@
       "MLW",
       "NWA",
       "Independent"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Indian": {
     "displayName": "Indian",
@@ -1488,7 +1640,8 @@
       "Desi",
       "Indian Girl",
       "Bollywood Style"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Indie": {
     "displayName": "Indie Games",
@@ -1496,7 +1649,8 @@
       "indie",
       "pixel",
       "roguelike"
-    ]
+    ],
+    "type": "gaming"
   },
   "Insertion": {
     "displayName": "Insertion",
@@ -1504,7 +1658,8 @@
       "Object Insertion",
       "Unusual Insertion",
       "Bottle Insertion"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Interactive": {
     "displayName": "Interactive",
@@ -1515,7 +1670,8 @@
       "Viewer Choice",
       "Multiple Endings",
       "Immersive"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Internet Mysteries": {
     "displayName": "Internet Mysteries",
@@ -1527,7 +1683,8 @@
       "creepy",
       "cicada",
       "deep web"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Interracial": {
     "displayName": "Interracial",
@@ -1535,14 +1692,16 @@
       "Mixed Race",
       "BBC Interracial",
       "IR Sex"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Italian": {
     "displayName": "Italian",
     "tags": [
       "Italian Girl",
       "Mediterranean"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Japanese": {
     "displayName": "Japanese",
@@ -1550,7 +1709,8 @@
       "JAV",
       "Japanese AV",
       "Bukkake Japanese"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Japanese Wrestling": {
     "displayName": "Japanese Wrestling",
@@ -1564,7 +1724,8 @@
       "puroresu",
       "strong style",
       "g1"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Jazz": {
     "displayName": "Jazz",
@@ -1572,7 +1733,8 @@
       "jazz",
       "bebop",
       "swing"
-    ]
+    ],
+    "type": "music"
   },
   "Jock": {
     "displayName": "Jock",
@@ -1584,7 +1746,8 @@
       "Jock Ass",
       "Locker Room Jock",
       "Muscle Jock"
-    ]
+    ],
+    "type": "nsfw"
   },
   "JOI": {
     "displayName": "JOI",
@@ -1593,14 +1756,16 @@
       "Masturbation Instruction",
       "Guided JOI",
       "CEI JOI"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Korean": {
     "displayName": "Korean",
     "tags": [
       "Korean Girl",
       "K-Pop Style"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Lactation": {
     "displayName": "Lactation",
@@ -1609,13 +1774,15 @@
       "Milking",
       "Lactating Tits",
       "Milk Squirt"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Ladyboy": {
     "displayName": "Ladyboy",
     "tags": [
       "Ladyboy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Languages": {
     "displayName": "Languages",
@@ -1627,7 +1794,8 @@
       "learning",
       "grammar",
       "vocabulary"
-    ]
+    ],
+    "type": "education"
   },
   "Lapdance": {
     "displayName": "Lapdance",
@@ -1635,7 +1803,8 @@
       "Lap Dance",
       "Stripper Lapdance",
       "Grinding Dance"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Latex": {
     "displayName": "Latex",
@@ -1644,7 +1813,8 @@
       "Latex Fetish",
       "Catsuit",
       "Shiny Latex"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Latina": {
     "displayName": "Latina",
@@ -1652,7 +1822,8 @@
       "Hispanic",
       "Latinx",
       "Latino"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Leather": {
     "displayName": "Leather",
@@ -1660,7 +1831,8 @@
       "Leather Fetish",
       "Leather Outfit",
       "Dominatrix Leather"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Leather Gay": {
     "displayName": "Leather Gay",
@@ -1672,7 +1844,8 @@
       "Leather Bar",
       "Harnesses",
       "Leather Chaps"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Lesbian": {
     "displayName": "Lesbian",
@@ -1682,7 +1855,8 @@
       "Scissoring",
       "Tribbing",
       "Lesbian Kiss"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Let's Play": {
     "displayName": "Let's Play",
@@ -1692,7 +1866,8 @@
       "commentary",
       "funny",
       "co-op"
-    ]
+    ],
+    "type": "gaming"
   },
   "Lingerie": {
     "displayName": "Lingerie",
@@ -1700,7 +1875,8 @@
       "Sexy Underwear",
       "Lace Lingerie",
       "Stockings Lingerie"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Literary Analysis": {
     "displayName": "Literary Analysis",
@@ -1708,7 +1884,8 @@
       "analysis",
       "theme",
       "essay"
-    ]
+    ],
+    "type": "literature"
   },
   "Lo-Fi": {
     "displayName": "Lo-Fi",
@@ -1716,7 +1893,8 @@
       "lofi",
       "chill",
       "study"
-    ]
+    ],
+    "type": "music"
   },
   "Lost Cartoons": {
     "displayName": "Lost Cartoons & TV",
@@ -1727,7 +1905,8 @@
       "missing",
       "banned episode",
       "pilot"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Lost Films": {
     "displayName": "Lost Films",
@@ -1737,7 +1916,8 @@
       "missing",
       "archive",
       "cut footage"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Lost TV": {
     "displayName": "Lost TV",
@@ -1745,7 +1925,8 @@
       "television",
       "broadcast",
       "lost episode"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Lucha Libre": {
     "displayName": "Lucha Libre",
@@ -1756,7 +1937,8 @@
       "High-Flying",
       "The Crash",
       "Zona 23"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Mafia": {
     "displayName": "Organized Crime",
@@ -1764,7 +1946,8 @@
       "mafia",
       "cartel",
       "gang"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Manga": {
     "displayName": "Manga",
@@ -1772,7 +1955,8 @@
       "manga",
       "comics",
       "graphic novel"
-    ]
+    ],
+    "type": "literature"
   },
   "Massage": {
     "displayName": "Massage",
@@ -1781,7 +1965,8 @@
       "Happy Ending Massage",
       "Oil Massage",
       "Nuru Massage"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Mathematics": {
     "displayName": "Mathematics",
@@ -1792,7 +1977,8 @@
       "statistics",
       "geometry",
       "proofs"
-    ]
+    ],
+    "type": "education"
   },
   "Mature": {
     "displayName": "Mature",
@@ -1800,7 +1986,8 @@
       "Cougar",
       "Older Woman",
       "Experienced Mature"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Medical": {
     "displayName": "Medical",
@@ -1809,7 +1996,8 @@
       "Doctor Fetish",
       "Clinic Play",
       "Speculum"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Metal": {
     "displayName": "Metal",
@@ -1817,14 +2005,16 @@
       "metal",
       "heavy",
       "thrash"
-    ]
+    ],
+    "type": "music"
   },
   "Mexican": {
     "displayName": "Mexican",
     "tags": [
       "Mexican Girl",
       "Latina Mexican"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Middle Eastern": {
     "displayName": "Middle Eastern",
@@ -1832,7 +2022,8 @@
       "Arab",
       "Persian",
       "Harem Style"
-    ]
+    ],
+    "type": "nsfw"
   },
   "MILF": {
     "displayName": "MILF",
@@ -1840,7 +2031,8 @@
       "Mature Mom",
       "Hot Mom",
       "Step Mom MILF"
-    ]
+    ],
+    "type": "nsfw"
   },
   "MMO": {
     "displayName": "MMO",
@@ -1848,7 +2040,8 @@
       "mmorpg",
       "online",
       "raid"
-    ]
+    ],
+    "type": "gaming"
   },
   "Mockumentary": {
     "displayName": "Mockumentary",
@@ -1859,7 +2052,8 @@
       "Cringe Comedy",
       "Handheld",
       "Interview"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Monster": {
     "displayName": "Monster",
@@ -1867,7 +2061,8 @@
       "Monster Sex",
       "Creature Fuck",
       "Tentacle Monster"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Muscle": {
     "displayName": "Muscle",
@@ -1876,7 +2071,8 @@
       "Bodybuilder",
       "Muscle Worship",
       "Fit Girl"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Musical": {
     "displayName": "Musical",
@@ -1884,7 +2080,8 @@
       "musical",
       "song",
       "broadway"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Mystery": {
     "displayName": "Mystery & Crime",
@@ -1894,7 +2091,8 @@
       "thriller",
       "whodunit",
       "noir"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Neighbor": {
     "displayName": "Neighbor",
@@ -1902,7 +2100,8 @@
       "Next Door",
       "Neighbor Fantasy",
       "Horny Neighbor"
-    ]
+    ],
+    "type": "nsfw"
   },
   "NeoNoir": {
     "displayName": "Neo-Noir",
@@ -1913,7 +2112,8 @@
       "Morally Ambiguous",
       "Urban",
       "Gritty"
-    ]
+    ],
+    "type": "film-tv"
   },
   "NJPW": {
     "displayName": "New Japan Pro-Wrestling",
@@ -1923,7 +2123,8 @@
       "G1 Climax",
       "Wrestle Kingdom",
       "Japan"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Non-Fiction": {
     "displayName": "Non-Fiction",
@@ -1933,7 +2134,8 @@
       "science",
       "philosophy",
       "memoir"
-    ]
+    ],
+    "type": "literature"
   },
   "Nurse": {
     "displayName": "Nurse",
@@ -1941,7 +2143,8 @@
       "Nurse Fetish",
       "Naughty Nurse",
       "Medical Nurse"
-    ]
+    ],
+    "type": "nsfw"
   },
   "NXT": {
     "displayName": "WWE NXT",
@@ -1950,7 +2153,8 @@
       "NXT",
       "Developmental",
       "Tuesday"
-    ]
+    ],
+    "type": "wrestling"
   },
   "NXT Europe": {
     "displayName": "NXT Europe",
@@ -1960,7 +2164,8 @@
       "UK",
       "Europe",
       "Developmental"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Office": {
     "displayName": "Office",
@@ -1968,7 +2173,8 @@
       "Office Sex",
       "Boss Secretary",
       "Workplace Fuck"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Oil": {
     "displayName": "Oil",
@@ -1977,7 +2183,8 @@
       "Body Oil",
       "Shiny Oil",
       "Massage Oil"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Oral": {
     "displayName": "Oral",
@@ -1987,7 +2194,8 @@
       "69",
       "Pussy Eating",
       "Deepthroat Oral"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Orgy": {
     "displayName": "Orgy",
@@ -1996,7 +2204,8 @@
       "Gangbang",
       "Multiple Partners",
       "Swinger Orgy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Otter": {
     "displayName": "Otter",
@@ -2005,7 +2214,8 @@
       "Slim Hairy",
       "Otter Boy",
       "Hairy Twink"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Pain": {
     "displayName": "Pain",
@@ -2014,7 +2224,8 @@
       "Masochism",
       "Nipple Torture",
       "Wax Pain"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Painting": {
     "displayName": "Painting",
@@ -2027,7 +2238,8 @@
       "watercolor",
       "plein air",
       "portrait"
-    ]
+    ],
+    "type": "art"
   },
   "Pay-Per-View": {
     "displayName": "Pay-Per-View & Premium Live Events",
@@ -2041,7 +2253,8 @@
       "Forbidden Door",
       "premium live event",
       "main event"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Pegging": {
     "displayName": "Pegging",
@@ -2049,7 +2262,8 @@
       "Strapon",
       "Strap On Fuck",
       "Pegging Anal"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Petplay": {
     "displayName": "Petplay",
@@ -2058,7 +2272,8 @@
       "Puppy Play",
       "Kitten Play",
       "Tail Plug"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Philosophy": {
     "displayName": "Philosophy",
@@ -2068,7 +2283,8 @@
       "logic",
       "metaphysics",
       "thinking"
-    ]
+    ],
+    "type": "education"
   },
   "Photography": {
     "displayName": "Photography",
@@ -2076,7 +2292,8 @@
       "photo",
       "camera",
       "composition"
-    ]
+    ],
+    "type": "art"
   },
   "Piercing": {
     "displayName": "Piercing",
@@ -2084,11 +2301,13 @@
       "Body Piercing",
       "Genital Piercing",
       "Nipple Piercing"
-    ]
+    ],
+    "type": "nsfw"
   },
   "pissing": {
     "displayName": "pissing",
-    "tags": []
+    "tags": [],
+    "type": "nsfw"
   },
   "Podcasts": {
     "displayName": "True Crime Podcasts",
@@ -2100,7 +2319,8 @@
       "host",
       "interview",
       "shoot"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Poetry": {
     "displayName": "Poetry",
@@ -2111,14 +2331,16 @@
       "anthology",
       "sonnet",
       "spoken word"
-    ]
+    ],
+    "type": "literature"
   },
   "Polish": {
     "displayName": "Polish",
     "tags": [
       "Polish Girl",
       "Eastern European"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Poop": {
     "displayName": "Classic Poop",
@@ -2126,7 +2348,8 @@
       "ytp",
       "sentence mixing",
       "classic"
-    ]
+    ],
+    "type": "comedy"
   },
   "Pop": {
     "displayName": "Pop Music",
@@ -2140,7 +2363,8 @@
       "synthpop",
       "indie pop",
       "k-pop"
-    ]
+    ],
+    "type": "music"
   },
   "Pornstar": {
     "displayName": "Pornstar",
@@ -2148,7 +2372,8 @@
       "Adult Star",
       "Famous Pornstar",
       "Professional"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Pregnant": {
     "displayName": "Pregnant",
@@ -2156,7 +2381,8 @@
       "Preggo",
       "Pregnant Belly",
       "Pregnant Sex"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Printmaking": {
     "displayName": "Printmaking",
@@ -2164,7 +2390,8 @@
       "print",
       "linocut",
       "screenprint"
-    ]
+    ],
+    "type": "art"
   },
   "Programming": {
     "displayName": "Programming",
@@ -2182,7 +2409,8 @@
       "developer",
       "rust",
       "systems"
-    ]
+    ],
+    "type": "technology"
   },
   "Promos & Mic Work": {
     "displayName": "Promos & Mic Work",
@@ -2190,7 +2418,8 @@
       "promo",
       "mic",
       "segment"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Psychology": {
     "displayName": "Psychology",
@@ -2198,7 +2427,8 @@
       "mind",
       "behavior",
       "cognition"
-    ]
+    ],
+    "type": "education"
   },
   "Public": {
     "displayName": "Public",
@@ -2207,7 +2437,8 @@
       "Exhibitionism",
       "Risky Public",
       "Outdoor Public"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Pussy Worship": {
     "displayName": "Pussy Worship",
@@ -2215,7 +2446,8 @@
       "Cunt Worship",
       "Pussy Licking",
       "Oral Worship"
-    ]
+    ],
+    "type": "nsfw"
   },
   "R&B / Soul": {
     "displayName": "R&B / Soul",
@@ -2223,7 +2455,8 @@
       "rnb",
       "soul",
       "funk"
-    ]
+    ],
+    "type": "music"
   },
   "Raw": {
     "displayName": "Monday Night Raw",
@@ -2235,7 +2468,8 @@
       "Weekly",
       "monday night",
       "flagship"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Raw Gay": {
     "displayName": "Raw Gay",
@@ -2245,7 +2479,8 @@
       "Unprotected Gay",
       "Gay Creampie",
       "Breeding Gay"
-    ]
+    ],
+    "type": "nsfw"
   },
   "RealityTV": {
     "displayName": "Reality TV",
@@ -2256,14 +2491,16 @@
       "Drama",
       "Game Show",
       "Fly-on-the-wall"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Redhead": {
     "displayName": "Redhead",
     "tags": [
       "Ginger",
       "Fiery Redhead"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Reggae": {
     "displayName": "Reggae",
@@ -2271,7 +2508,8 @@
       "reggae",
       "dub",
       "ska"
-    ]
+    ],
+    "type": "music"
   },
   "Retro": {
     "displayName": "Retro Gaming",
@@ -2279,7 +2517,8 @@
       "retro",
       "classic",
       "emulation"
-    ]
+    ],
+    "type": "gaming"
   },
   "Retrotech": {
     "displayName": "Retro Tech",
@@ -2287,7 +2526,8 @@
       "retro",
       "vintage",
       "restoration"
-    ]
+    ],
+    "type": "other"
   },
   "Reviews": {
     "displayName": "Reviews",
@@ -2301,7 +2541,8 @@
       "laptop",
       "gadget",
       "smartphone"
-    ]
+    ],
+    "type": "technology"
   },
   "Rimming": {
     "displayName": "Rimming",
@@ -2310,7 +2551,8 @@
       "Rimjob",
       "Anilingus",
       "Tongue In Ass"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Ring of Honor": {
     "displayName": "Ring of Honor",
@@ -2319,7 +2561,8 @@
       "Pure Wrestling",
       "ROH TV",
       "Code of Honor"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Robotics": {
     "displayName": "Robotics",
@@ -2327,7 +2570,8 @@
       "robots",
       "automation",
       "diy"
-    ]
+    ],
+    "type": "technology"
   },
   "Rock": {
     "displayName": "Rock & Roll",
@@ -2342,7 +2586,8 @@
       "punk",
       "alternative",
       "classic rock"
-    ]
+    ],
+    "type": "music"
   },
   "Roleplay": {
     "displayName": "Roleplay",
@@ -2350,7 +2595,8 @@
       "Fantasy Role",
       "Scenario Play",
       "Character Roleplay"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Romance": {
     "displayName": "Romance",
@@ -2360,7 +2606,8 @@
       "love",
       "romance",
       "drama"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Romantic": {
     "displayName": "Romantic",
@@ -2369,7 +2616,8 @@
       "Passionate",
       "Lovemaking",
       "Slow Sex"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Rough": {
     "displayName": "Rough",
@@ -2379,7 +2627,8 @@
       "Slapping",
       "Choking",
       "Hair Pulling"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Royal Rumble": {
     "displayName": "Royal Rumble",
@@ -2387,14 +2636,16 @@
       "rumble",
       "battle royal",
       "elimination"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Russian": {
     "displayName": "Russian",
     "tags": [
       "Russian Girl",
       "Russian Accent"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Scams": {
     "displayName": "Scams & Fraud",
@@ -2402,7 +2653,8 @@
       "scam",
       "fraud",
       "conman"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Schoolgirl": {
     "displayName": "Schoolgirl",
@@ -2411,7 +2663,8 @@
       "School Girl",
       "Plaid Skirt",
       "Student Fantasy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Sci-Fi": {
     "displayName": "Science Fiction",
@@ -2426,7 +2679,8 @@
       "AI",
       "Time Travel",
       "Alien"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Science": {
     "displayName": "Science",
@@ -2441,7 +2695,8 @@
       "engineering",
       "explainer",
       "education"
-    ]
+    ],
+    "type": "education"
   },
   "Scissoring": {
     "displayName": "Scissoring",
@@ -2449,7 +2704,8 @@
       "Tribbing",
       "Pussy Rubbing",
       "Lesbian Scissoring"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Sculpture": {
     "displayName": "Sculpture & 3D",
@@ -2460,7 +2716,8 @@
       "form",
       "bronze",
       "carving"
-    ]
+    ],
+    "type": "art"
   },
   "Serial": {
     "displayName": "Serial Killers",
@@ -2468,7 +2725,8 @@
       "serial killer",
       "profile",
       "psychology"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Shaved": {
     "displayName": "Shaved",
@@ -2476,7 +2734,8 @@
       "Smooth Shaven",
       "Bald Pussy",
       "Shaved Smooth"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Shibari": {
     "displayName": "Shibari",
@@ -2484,7 +2743,8 @@
       "Japanese Rope Bondage",
       "Kinbaku",
       "Rope Art"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Sissy": {
     "displayName": "Sissy",
@@ -2493,7 +2753,8 @@
       "Sissy Training",
       "Sissy Maid",
       "Feminization"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Slave": {
     "displayName": "Slave",
@@ -2501,7 +2762,8 @@
       "Slave Training",
       "Owned Slave",
       "Submissive Slave"
-    ]
+    ],
+    "type": "nsfw"
   },
   "SliceOfLife": {
     "displayName": "Slice of Life",
@@ -2512,7 +2774,8 @@
       "Character-driven",
       "Low Stakes",
       "Relatable"
-    ]
+    ],
+    "type": "film-tv"
   },
   "SmackDown": {
     "displayName": "Friday Night SmackDown",
@@ -2524,7 +2787,8 @@
       "Weekly",
       "friday night",
       "blue brand"
-    ]
+    ],
+    "type": "wrestling"
   },
   "SoapOpera": {
     "displayName": "Soap Opera",
@@ -2535,7 +2799,8 @@
       "Romance",
       "Betrayal",
       "Ensemble"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Solo": {
     "displayName": "Solo",
@@ -2544,7 +2809,8 @@
       "Solo Female",
       "Solo Male",
       "Toy Play"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Source Material": {
     "displayName": "Source Material",
@@ -2553,7 +2819,8 @@
       "base",
       "raw",
       "clips"
-    ]
+    ],
+    "type": "other"
   },
   "Spanish": {
     "displayName": "Spanish",
@@ -2563,7 +2830,8 @@
       "Spanish Girl",
       "Spanish Guy",
       "Spanish Accent"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Spanking": {
     "displayName": "Spanking",
@@ -2571,7 +2839,8 @@
       "Ass Spanking",
       "OTK Spanking",
       "Bare Bottom Spanking"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Speedruns": {
     "displayName": "Speedruns",
@@ -2581,7 +2850,8 @@
       "glitches",
       "world record",
       "any%"
-    ]
+    ],
+    "type": "gaming"
   },
   "Spit": {
     "displayName": "Spit",
@@ -2590,7 +2860,8 @@
       "Spit Play",
       "Drooling",
       "Spit Roast"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Squirting": {
     "displayName": "Squirting",
@@ -2598,7 +2869,8 @@
       "Female Ejaculation",
       "Squirt Orgasm",
       "Gushing"
-    ]
+    ],
+    "type": "nsfw"
   },
   "STARDOM": {
     "displayName": "STARDOM",
@@ -2608,7 +2880,8 @@
       "Japan",
       "5STAR Grand Prix",
       "Cinderella"
-    ]
+    ],
+    "type": "wrestling"
   },
   "StepMom": {
     "displayName": "StepMom",
@@ -2616,7 +2889,8 @@
       "Stepmom",
       "Step Mother",
       "Taboo Stepmom"
-    ]
+    ],
+    "type": "nsfw"
   },
   "StepSister": {
     "displayName": "StepSister",
@@ -2624,7 +2898,8 @@
       "Stepsister",
       "Step Sis",
       "Taboo Stepsister"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Stockings": {
     "displayName": "Stockings",
@@ -2633,7 +2908,8 @@
       "Pantyhose",
       "Stocking Fetish",
       "Ripped Stockings"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Street Art": {
     "displayName": "Street Art",
@@ -2641,7 +2917,8 @@
       "graffiti",
       "mural",
       "urban"
-    ]
+    ],
+    "type": "art"
   },
   "Striptease": {
     "displayName": "Striptease",
@@ -2649,7 +2926,8 @@
       "Stripping",
       "Pole Dance",
       "Seductive Strip"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Sub": {
     "displayName": "Sub",
@@ -2657,7 +2935,8 @@
       "Submissive",
       "Bottom",
       "Obedient Sub"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Succubus": {
     "displayName": "Succubus",
@@ -2665,7 +2944,8 @@
       "Demon",
       "Sex Demon",
       "Seductive Demon"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Surreal": {
     "displayName": "Surreal",
@@ -2673,21 +2953,24 @@
       "surreal",
       "abstract",
       "weird"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Suspension": {
     "displayName": "Suspension",
     "tags": [
       "Rope Suspension",
       "Hanging Bondage"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Switch": {
     "displayName": "Switch",
     "tags": [
       "Versatile",
       "Switch Dom Sub"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Tag Team": {
     "displayName": "Tag Team",
@@ -2695,7 +2978,8 @@
       "tag",
       "team",
       "division"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Tattoo": {
     "displayName": "Tattoo",
@@ -2704,7 +2988,8 @@
       "Ink Girl",
       "Alt",
       "Tattoo Fetish"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Teacher": {
     "displayName": "Teacher",
@@ -2712,7 +2997,8 @@
       "Teacher Student",
       "Naughty Teacher",
       "School Teacher"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Tease": {
     "displayName": "Tease",
@@ -2720,13 +3006,15 @@
       "Teasing",
       "Denial Tease",
       "Strip Tease"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Teen": {
     "displayName": "Teen",
     "tags": [
       "Teen"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Tennis": {
     "displayName": "YTP Tennis",
@@ -2734,7 +3022,8 @@
       "tennis",
       "collab",
       "back and forth"
-    ]
+    ],
+    "type": "comedy"
   },
   "Tentacle": {
     "displayName": "Tentacle",
@@ -2742,7 +3031,8 @@
       "Tentacle Porn",
       "Monster Tentacle",
       "Alien Tentacle"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Thai": {
     "displayName": "Thai",
@@ -2751,7 +3041,8 @@
       "Thai Girl",
       "Thai Guy",
       "Thai Ladyboy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Thick": {
     "displayName": "Thick",
@@ -2759,7 +3050,8 @@
       "Thick Thighs",
       "Thick Girl",
       "Thicc"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Threesome": {
     "displayName": "Threesome",
@@ -2768,7 +3060,8 @@
       "MMF",
       "FFM",
       "Bisexual Threesome"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Thriller": {
     "displayName": "Thriller",
@@ -2780,7 +3073,8 @@
       "Intrigue",
       "Danger",
       "psychological"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Tickling": {
     "displayName": "Tickling",
@@ -2788,7 +3082,8 @@
       "Tickling Fetish",
       "Tickle Torture",
       "Feather Play"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Titfuck": {
     "displayName": "Titfuck",
@@ -2796,7 +3091,8 @@
       "Tit Job",
       "Paizuri",
       "Boob Fuck"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Tokusatsu": {
     "displayName": "Tokusatsu",
@@ -2807,7 +3103,8 @@
       "Monster",
       "Hero Team",
       "Giant Robot"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Transgender": {
     "displayName": "Trans",
@@ -2818,21 +3115,24 @@
       "Trans boy",
       "MFT",
       "FTM"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Turkish": {
     "displayName": "Turkish",
     "tags": [
       "Turkish Girl",
       "Middle Eastern Turkish"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Twink": {
     "displayName": "Twink",
     "tags": [
       "Young Slim Gay",
       "Twink Boy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Unsolved": {
     "displayName": "Unsolved",
@@ -2840,7 +3140,8 @@
       "unsolved",
       "mystery",
       "investigation"
-    ]
+    ],
+    "type": "true-crime"
   },
   "Upskirt": {
     "displayName": "Upskirt",
@@ -2848,7 +3149,8 @@
       "Up Skirt",
       "Panties Peek",
       "Accidental Upskirt"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Vampire": {
     "displayName": "Vampire",
@@ -2856,7 +3158,8 @@
       "Vampire Fetish",
       "Biting",
       "Blood Play"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Video Games": {
     "displayName": "Lost Video Games",
@@ -2865,7 +3168,8 @@
       "cancelled",
       "prototype",
       "unreleased"
-    ]
+    ],
+    "type": "gaming"
   },
   "Vietnamese": {
     "displayName": "Vietnamese",
@@ -2873,7 +3177,8 @@
       "Người Việt",
       "Vietnamese Girl",
       "Vietnamese Guy"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Voyeur": {
     "displayName": "Voyeur",
@@ -2881,7 +3186,8 @@
       "Voyeurism",
       "Watching",
       "Hidden Cam Voyeur"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Walkthroughs": {
     "displayName": "Walkthroughs",
@@ -2891,7 +3197,8 @@
       "100%",
       "collectibles",
       "boss"
-    ]
+    ],
+    "type": "gaming"
   },
   "War": {
     "displayName": "War",
@@ -2899,7 +3206,8 @@
       "war",
       "military",
       "historical"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Waxplay": {
     "displayName": "Waxplay",
@@ -2907,7 +3215,8 @@
       "Candle Wax",
       "Hot Wax",
       "Wax Dripping"
-    ]
+    ],
+    "type": "nsfw"
   },
   "Web Development": {
     "displayName": "Web Development",
@@ -2915,7 +3224,8 @@
       "webdev",
       "frontend",
       "backend"
-    ]
+    ],
+    "type": "technology"
   },
   "WebSeries": {
     "displayName": "Web Series",
@@ -2926,7 +3236,8 @@
       "Vlog",
       "Streaming",
       "Independent"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Western": {
     "displayName": "Western",
@@ -2937,7 +3248,8 @@
       "Saloon",
       "Gunslinger",
       "Desert"
-    ]
+    ],
+    "type": "film-tv"
   },
   "Women's Wrestling": {
     "displayName": "Women's Wrestling",
@@ -2950,7 +3262,8 @@
       "WWE Women's",
       "division",
       "title"
-    ]
+    ],
+    "type": "wrestling"
   },
   "Writing Craft": {
     "displayName": "Writing Craft",
@@ -2958,7 +3271,8 @@
       "writing",
       "craft",
       "authorship"
-    ]
+    ],
+    "type": "literature"
   },
   "YTP": {
     "displayName": "YouTube Poop",
@@ -2968,7 +3282,8 @@
       "sentence mixing",
       "stutter loop",
       "classic"
-    ]
+    ],
+    "type": "comedy"
   },
   "YTPMV": {
     "displayName": "YTPMV",
@@ -2977,6 +3292,7 @@
       "music",
       "remix",
       "sus"
-    ]
+    ],
+    "type": "music"
   }
 }
