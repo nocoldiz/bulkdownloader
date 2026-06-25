@@ -1439,21 +1439,22 @@ def run_from_db(args):
 
     data = bulk_db.load()
 
-    # 1) feed the txt queue file into db.json (kept intact, deduped)
+    # 1) feed the txt queue file into db.json (deduped)
     links_file = Path(args.links_file) if args.links_file else _find_queue_file()
     if not links_file:
         links_file = DATA_DIR / 'links_to_download.txt'
     if links_file.exists():
         fed = bulk_db.ingest_links_txt(data, links_file)
         if fed:
-            print(f'[db] Fed {len(fed)} new link(s) from {links_file.name} into db.json '
-                  f'(file left untouched).', flush=True)
+            print(f'[db] Fed {len(fed)} new link(s) from {links_file.name} into db.json', flush=True)
 
     # 2) de-dup the whole queue/bookmarks, then persist
     q_removed, _ = bulk_db.dedup(data)
     if q_removed:
         print(f'[db] Removed {q_removed} duplicate queue link(s).', flush=True)
     bulk_db.save(data)
+    # Mirror the db queue back to links_to_download.txt so they stay in sync
+    bulk_db.write_txt_mirror(data)
 
     pending = [it for it in data['queue']
                if it.get('status') in (bulk_db.ST_QUEUED, bulk_db.ST_STOPPED)]

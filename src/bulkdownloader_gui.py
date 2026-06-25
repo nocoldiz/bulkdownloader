@@ -70,6 +70,7 @@ for _p in (str(APP_DIR), str(BUNDLE_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 import bulk_db  # noqa: E402
+import categorizer  # noqa: E402  (shared auto-categorize engine, reused by the Categorize tab)
 
 if FROZEN:
     # bulkdownloader.py is bundled as data alongside the frozen exe.
@@ -731,6 +732,7 @@ class DownloadManager(tk.Tk):
         self.items = {}                  # iid -> {url, status, pct, file, title, speed, eta, error}
         self.downloaded = {}             # norm_key -> {url, file, ts}  (persistent registry)
         self.bookmarks = []              # saved video links (scraped from X, etc.)
+        self.categories = {}             # name -> {stars, tags, displayName} (auto-categorize)
         self._x_scraped = []             # view rows for the X-session scraped-links tab
         self._migrated_count = 0
         self.out_queue = queue.Queue()   # worker/threads -> UI messages
@@ -774,6 +776,9 @@ class DownloadManager(tk.Tk):
 
         self._dupe_gen = 0
         self._dupe_paths = {}
+
+        self._cat_gen = 0                # scan generation for the categorize panel
+        self._cat_plan = []              # last previewed move plan (list of move dicts)
 
         _saved_out = self._config.get('out_dir')
         try:   # migrate the old videos/downloads default to the plain downloads folder
@@ -880,6 +885,7 @@ class DownloadManager(tk.Tk):
         self.tab_bookmarks = ttk.Frame(self.nb)
         self.tab_search = ttk.Frame(self.nb)
         self.tab_gallery = ttk.Frame(self.nb)
+        self.tab_categorize = ttk.Frame(self.nb)
         self.tab_duplicates = ttk.Frame(self.nb)
         self.tab_xlogin = ttk.Frame(self.nb)
         self.tab_xscraped = ttk.Frame(self.nb)
@@ -889,6 +895,7 @@ class DownloadManager(tk.Tk):
         self.nb.add(self.tab_bookmarks, text='🔖 Bookmarks')
         self.nb.add(self.tab_search, text='🔍 Search')
         self.nb.add(self.tab_gallery, text='🎬 Gallery')
+        self.nb.add(self.tab_categorize, text='🗂 Categorize')
         self.nb.add(self.tab_duplicates, text='🧬 Duplicates')
         self.nb.add(self.tab_xlogin, text='🔑 X.com')
         self.nb.add(self.tab_xscraped, text='🐦 X Links')
@@ -898,6 +905,7 @@ class DownloadManager(tk.Tk):
         self._build_bookmarks_tab(self.tab_bookmarks)
         self._build_search_tab(self.tab_search)
         self._build_gallery_tab(self.tab_gallery)
+        self._build_categorize_tab(self.tab_categorize)
         self._build_duplicates_tab(self.tab_duplicates)
         self._build_xlogin_tab(self.tab_xlogin)
         self._build_xscraped_tab(self.tab_xscraped)
@@ -1091,6 +1099,7 @@ class DownloadManager(tk.Tk):
 
         self.downloaded = data.get('downloaded') or {}
         self.bookmarks = data.get('bookmarks') or []
+        self.categories = data.get('categories') or {}
         seen = set()
         for entry in data.get('queue', []):
             url = (entry.get('url') or '').strip()
@@ -1120,6 +1129,9 @@ class DownloadManager(tk.Tk):
         # Populate the X-scraped links tab from the saved DB too.
         if self.bookmarks and hasattr(self, 'xs_tree'):
             self._load_xscraped(announce=False)
+        # Reflect any saved category stars into the Categorize tab.
+        if hasattr(self, 'cat_tree'):
+            self._refresh_cat_tree()
         if self._next_pending():
             extra = f' (+{len(fed)} from links_to_download.txt)' if fed else ''
             self.status_var.set(f'Queue loaded.{extra} Press Start to download.')
@@ -1169,15 +1181,19 @@ class DownloadManager(tk.Tk):
                           'file': it.get('file'), 'error': it.get('error') or '',
                           'source': it.get('source')})
         return {'version': 2, 'queue': queue, 'downloaded': self.downloaded,
-                'bookmarks': self.bookmarks}
+                'bookmarks': self.bookmarks, 'categories': self.categories}
 
     def _persist_db(self):
         """Save the full queue (in display order) + downloaded registry + bookmarks."""
         bulk_db.save(self._db_snapshot())
 
     # Kept as the canonical "queue changed → persist" hook (legacy name).
+    # Also mirrors the queue into links_to_download.txt bidirectionally.
     def _rebuild_to_download_file(self):
         self._persist_db()
+        # Sync the queue with links_to_download.txt so both always mirror each other.
+        data = self._db_snapshot()
+        bulk_db.write_txt_mirror(data)
 
     def _is_downloaded(self, url):
         """True when this URL was already downloaded AND its file is still present
@@ -1369,7 +1385,7 @@ class DownloadManager(tk.Tk):
                 self.tree._checked.discard(iid)
                 self.tree.delete(iid)
                 n += 1
-        self._persist_db()
+        self._rebuild_to_download_file()
         self._update_overall()
         self._refresh_errored()
         self.status_var.set(f'Removed {n} done / errored row(s) from the queue.')
@@ -1450,7 +1466,7 @@ class DownloadManager(tk.Tk):
                 self.tree._checked.discard(iid)
                 self.tree.delete(iid)
                 n += 1
-        self._persist_db()
+        self._rebuild_to_download_file()
         self._update_overall()
         self._refresh_errored()
         self.status_var.set(f'Cleared {n} errored item(s).')
@@ -1756,6 +1772,226 @@ class DownloadManager(tk.Tk):
         it = self.items.get(sel[0])
         if it:
             messagebox.showwarning('Download failed', f"{it['url']}\n\n{it.get('error') or 'unknown error'}")
+
+    # ════════════════════════════════════════════════════════════════
+    #  Categorize tab  ·  star categories, preview a plan, sort downloads
+    # ════════════════════════════════════════════════════════════════
+    def _build_categorize_tab(self, parent):
+        pad = {'padx': 12, 'pady': 6}
+        head = ttk.Frame(parent)
+        head.pack(fill='x', **pad)
+        ttk.Label(head, text='Auto-categorize downloads', style='Header.TLabel').pack(anchor='w')
+        ttk.Label(head, text='Star the categories whose folders you want created (click the ☆ stars). '
+                             'Preview the move plan, then apply to sort loose videos in your download '
+                             'folder into the matching category subfolders. Stars are saved in db.json.',
+                  style='Sub.TLabel').pack(anchor='w')
+
+        bar = ttk.Frame(parent)
+        bar.pack(fill='x', **pad)
+        ttk.Button(bar, text='⭐ Seed presets', command=self._cat_seed_presets).pack(side='left')
+        ttk.Button(bar, text='➕ Add', command=self._cat_add_category).pack(side='left', padx=6)
+        ttk.Button(bar, text='🗑 Remove', command=self._cat_remove_selected).pack(side='left')
+        ttk.Button(bar, text='🔍 Preview plan', style='Accent.TButton',
+                   command=self._cat_preview).pack(side='left', padx=(16, 6))
+        ttk.Button(bar, text='✅ Apply moves', style='Stop.TButton', command=self._cat_apply).pack(side='left')
+        self.cat_info = tk.StringVar(value='Star categories, then Preview a plan.')
+        ttk.Label(bar, textvariable=self.cat_info, style='Count.TLabel').pack(side='right')
+
+        paned = ttk.PanedWindow(parent, orient='horizontal')
+        paned.pack(fill='both', expand=True, **pad)
+
+        # left — categories with star ratings (the selector for which folders exist)
+        left = ttk.LabelFrame(paned, text='Categories  ·  click ★ to choose which folders are created')
+        li = ttk.Frame(left)
+        li.pack(fill='both', expand=True, padx=8, pady=8)
+        self.cat_tree = ttk.Treeview(li, columns=('star', 'tags'), show='tree headings', selectmode='extended')
+        self.cat_tree.heading('#0', text='Category')
+        self.cat_tree.heading('star', text='Stars')
+        self.cat_tree.heading('tags', text='Tags')
+        self.cat_tree.column('#0', width=230, stretch=True)
+        self.cat_tree.column('star', width=72, anchor='center', stretch=False)
+        self.cat_tree.column('tags', width=48, anchor='e', stretch=False)
+        csb = ttk.Scrollbar(li, command=self.cat_tree.yview)
+        self.cat_tree.configure(yscrollcommand=csb.set)
+        self.cat_tree.pack(side='left', fill='both', expand=True)
+        csb.pack(side='right', fill='y')
+        self.cat_tree.bind('<Button-1>', self._cat_on_click, add='+')
+        self.cat_count = tk.StringVar(value='')
+        ttk.Label(left, textvariable=self.cat_count, style='Sub.TLabel').pack(anchor='w', padx=8, pady=(0, 6))
+
+        # right — the dry-run move plan, grouped by destination folder
+        right = ttk.LabelFrame(paned, text='Move plan  ·  preview before applying')
+        ri = ttk.Frame(right)
+        ri.pack(fill='both', expand=True, padx=8, pady=8)
+        self.cat_plan_tree = ttk.Treeview(ri, columns=('from',), show='tree headings', selectmode='browse')
+        self.cat_plan_tree.heading('#0', text='File / destination')
+        self.cat_plan_tree.heading('from', text='From')
+        self.cat_plan_tree.column('#0', width=320, stretch=True)
+        self.cat_plan_tree.column('from', width=110, anchor='w', stretch=False)
+        psb = ttk.Scrollbar(ri, command=self.cat_plan_tree.yview)
+        self.cat_plan_tree.configure(yscrollcommand=psb.set)
+        self.cat_plan_tree.pack(side='left', fill='both', expand=True)
+        psb.pack(side='right', fill='y')
+
+        paned.add(left, weight=1)
+        paned.add(right, weight=1)
+
+        self._refresh_cat_tree()
+
+    def _cat_star_glyph(self, stars):
+        stars = max(0, min(int(stars), bulk_db.CATEGORY_MAX_STARS))
+        return '★' * stars + '☆' * (bulk_db.CATEGORY_MAX_STARS - stars)
+
+    def _refresh_cat_tree(self):
+        tree = self.cat_tree
+        for iid in tree.get_children():
+            tree.delete(iid)
+        self._cat_names = {}                       # row iid -> category name
+        for i, name in enumerate(sorted(self.categories, key=str.lower)):
+            entry = self.categories.get(name) or {}
+            if not isinstance(entry, dict):
+                entry = {}
+            stars = int(entry.get('stars', 0))
+            tags  = entry.get('tags', []) or []
+            iid = f'c{i}'
+            self._cat_names[iid] = name
+            tree.insert('', 'end', iid=iid, text=name,
+                        values=(self._cat_star_glyph(stars), str(len(tags))))
+        starred = sum(1 for e in self.categories.values()
+                      if isinstance(e, dict) and int(e.get('stars', 0)) >= 1)
+        self.cat_count.set(f'{len(self.categories)} categories · {starred} starred (folders to create)')
+
+    def _cat_on_click(self, event):
+        """Click on the star cell cycles the rating 0→1→2→3→0 and saves to db.json."""
+        tree = self.cat_tree
+        if tree.identify_region(event.x, event.y) != 'cell':
+            return None
+        if tree.identify_column(event.x) != '#1':         # the Stars column
+            return None
+        iid = tree.identify_row(event.y)
+        name = self._cat_names.get(iid)
+        if not name:
+            return None
+        stars = bulk_db.cycle_category_stars({'categories': self.categories}, name)
+        self._persist_db()
+        tree.set(iid, 'star', self._cat_star_glyph(stars))
+        starred = sum(1 for e in self.categories.values()
+                      if isinstance(e, dict) and int(e.get('stars', 0)) >= 1)
+        self.cat_count.set(f'{len(self.categories)} categories · {starred} starred (folders to create)')
+        return 'break'
+
+    def _cat_seed_presets(self):
+        presets = categorizer.load_preset_categories()
+        if not presets:
+            messagebox.showwarning('No presets', 'Could not find the bundled categories.json preset file.')
+            return
+        added = bulk_db.seed_categories({'categories': self.categories}, presets)
+        self._persist_db()
+        self._refresh_cat_tree()
+        self.cat_info.set(f'Seeded {added} new category preset(s). '
+                          f'Click the ☆ stars to pick which folders to create.')
+
+    def _cat_add_category(self):
+        from tkinter import simpledialog
+        name = simpledialog.askstring('Add category', 'Category name (the folder it will create):', parent=self)
+        if not name or not name.strip():
+            return
+        name = name.strip()
+        bulk_db.set_category({'categories': self.categories}, name, stars=1)
+        self._persist_db()
+        self._refresh_cat_tree()
+        self.cat_info.set(f'Added “{name}” (1★). Preview a plan to sort files into it.')
+
+    def _cat_remove_selected(self):
+        names = [n for n in (self._cat_names.get(i) for i in self.cat_tree.selection()) if n]
+        if not names:
+            messagebox.showinfo('Nothing selected', 'Select one or more categories to remove.')
+            return
+        if not messagebox.askyesno('Remove categories',
+                                   f'Remove {len(names)} categor(y/ies) from the list?\n\n'
+                                   'Files already on disk are NOT touched.'):
+            return
+        for n in names:
+            bulk_db.remove_category({'categories': self.categories}, n)
+        self._persist_db()
+        self._refresh_cat_tree()
+        self.cat_info.set(f'Removed {len(names)} categor(y/ies).')
+
+    def _cat_preview(self):
+        folder = Path(self.out_dir.get())
+        if not folder.is_dir():
+            self.cat_info.set('Download folder does not exist yet.')
+            return
+        starred = bulk_db.starred_categories({'categories': self.categories})
+        if not starred:
+            self.cat_info.set('Star at least one category first (click the ☆ stars).')
+            return
+        folder_terms = categorizer.folder_terms_from_categories(starred)
+        self.cat_info.set('Scanning…')
+        self._cat_gen += 1
+        gen = self._cat_gen
+        threading.Thread(target=self._cat_preview_thread,
+                         args=(folder, folder_terms, gen), daemon=True).start()
+
+    def _cat_preview_thread(self, folder, folder_terms, gen):
+        try:
+            videos = categorizer.scan_videos(folder)
+            moves = categorizer.build_plan(videos, folder_terms)
+        except OSError:
+            moves = []
+        self.out_queue.put(('cat_plan', gen, moves, None))
+
+    def _handle_cat_plan(self, gen, moves):
+        if gen != self._cat_gen:
+            return
+        self._cat_plan = moves
+        for iid in self.cat_plan_tree.get_children():
+            self.cat_plan_tree.delete(iid)
+        by_dest = {}
+        for m in moves:
+            by_dest.setdefault(m['to_path'], []).append(m)
+        for di, dest in enumerate(sorted(by_dest)):
+            ms = by_dest[dest]
+            node = self.cat_plan_tree.insert('', 'end', iid=f'd{di}', open=True,
+                                             text=f'→ {dest}   ({len(ms)})', values=('',))
+            for fi, m in enumerate(ms):
+                self.cat_plan_tree.insert(node, 'end', iid=f'd{di}f{fi}',
+                                          text=m['name'], values=(m['cat_path'] or 'root',))
+        if moves:
+            self.cat_info.set(f'{len(moves)} file(s) → {len(by_dest)} folder(s). Review, then Apply moves.')
+        else:
+            self.cat_info.set('No moves needed — everything is already sorted. (Star more categories?)')
+
+    def _cat_apply(self):
+        if not self._cat_plan:
+            messagebox.showinfo('Nothing to apply', 'Preview a plan first (🔍 Preview plan).')
+            return
+        folder = Path(self.out_dir.get())
+        if not folder.is_dir():
+            self.cat_info.set('Download folder does not exist yet.')
+            return
+        n = len(self._cat_plan)
+        if not messagebox.askyesno('Apply moves',
+                                   f'Move {n} file(s) into their matching category folders?'):
+            return
+        moves = self._cat_plan
+        self.cat_info.set(f'Moving {n} file(s)…')
+        threading.Thread(target=self._cat_apply_thread, args=(moves, folder), daemon=True).start()
+
+    def _cat_apply_thread(self, moves, folder):
+        logs = []
+        done, failed = categorizer.apply_plan(moves, folder, log=logs.append)
+        for line in logs:
+            self.out_queue.put(('console', None, f'[categorize] {line}', None))
+        self.out_queue.put(('cat_applied', None, (done, failed), None))
+
+    def _handle_cat_applied(self, result):
+        done, failed = result
+        msg = f'🗂 Categorized {done} file(s)' + (f', {failed} failed.' if failed else '.')
+        self.status_var.set(msg)
+        self.cat_info.set(msg)
+        self._cat_plan = []
+        self._cat_preview()        # re-scan so the plan reflects the new layout
 
     # ════════════════════════════════════════════════════════════════
     #  Duplicates tab
@@ -3750,6 +3986,10 @@ class DownloadManager(tk.Tk):
                     self._apply_gallery_thumb(iid, a, b)
                 elif kind == 'duplicates':
                     self._handle_duplicates(iid, a)
+                elif kind == 'cat_plan':
+                    self._handle_cat_plan(iid, a)
+                elif kind == 'cat_applied':
+                    self._handle_cat_applied(a)
                 elif kind == 'autodetect':
                     self._handle_autodetect(a)
                 elif kind == 'status_msg':

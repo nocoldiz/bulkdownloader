@@ -15,8 +15,10 @@ A single ``db.json`` holds every link the app knows about, split into sections:
                    into the queue and downloaded (with the saved credentials).
 
 Design rules (per project requirements):
-* The ``links_to_download.txt`` file is an *input only*: its links are fed into the
-  queue section and the txt file is **never emptied** by the import.
+* The ``links_to_download.txt`` file is a *bidirectional mirror* of the queue
+  section: every queue mutation writes the ordered queue back to the txt file,
+  and the txt file is re-read on launch to feed any external edits back into
+  the queue.
 * Every mutation de-duplicates by normalised key, so the same link can be fed in
   repeatedly (txt import, paste, scrape) without ever duplicating.
 """
@@ -43,6 +45,7 @@ TRACKING_PARAMS = {'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_
 
 DOWNLOADED_CAP = 5000        # max entries kept in the downloaded registry
 BOOKMARKS_CAP = 20000        # max saved bookmarks
+CATEGORY_MAX_STARS = 3       # star rating ceiling for a category (0 = folder not created)
 
 # Status labels (kept in sync with the GUI).
 ST_QUEUED = 'queued'
@@ -56,6 +59,12 @@ def db_path():
     """Location of the shared db.json — override with $BULK_DB_FILE."""
     env = os.environ.get('BULK_DB_FILE', '').strip()
     return Path(env) if env else (CONFIG_DIR / 'db.json')
+
+
+def download_txt_path():
+    """Location of the shared links_to_download.txt — override with $BULK_TXT_FILE."""
+    env = os.environ.get('BULK_TXT_FILE', '').strip()
+    return Path(env) if env else (DATA_DIR / 'links_to_download.txt')
 
 
 def is_http(url):
@@ -81,7 +90,7 @@ def norm_key(url):
 
 
 def blank():
-    return {'version': 2, 'queue': [], 'downloaded': {}, 'bookmarks': []}
+    return {'version': 2, 'queue': [], 'downloaded': {}, 'bookmarks': [], 'categories': {}}
 
 
 def load(path=None):
@@ -96,6 +105,8 @@ def load(path=None):
                 data['downloaded'] = {}
             if not isinstance(data.get('bookmarks'), list):
                 data['bookmarks'] = []
+            if not isinstance(data.get('categories'), dict):
+                data['categories'] = {}
             return data
     except (OSError, ValueError):
         pass
@@ -113,6 +124,45 @@ def save(data, path=None):
         return True
     except OSError:
         return False
+
+
+# ── txt mirror ─────────────────────────────────────────────────────────
+
+def queue_to_urls(data):
+    """Extract the ordered list of URLs from the queue section (pending or not)."""
+    return [it['url'] for it in data['queue'] if is_http(it.get('url', ''))]
+
+
+def write_txt_mirror(data, txt_path=None):
+    """Write every queued URL (in display order) into links_to_download.txt.
+    This makes the txt file a perfect mirror of the db.json queue."""
+    if txt_path is None:
+        txt_path = download_txt_path()
+    p = Path(txt_path)
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        urls = queue_to_urls(data)
+        p.write_text('\n'.join(urls) + ('\n' if urls else ''), encoding='utf-8')
+        return True
+    except OSError:
+        return False
+
+
+def sync_txt_into_queue(data, txt_path=None):
+    """Feed every (http) URL from links_to_download.txt into the queue section
+    (deduped, existing items preserved). Returns how many new URLs were added.
+    This is the direction: txt → db."""
+    if txt_path is None:
+        txt_path = download_txt_path()
+    return add_to_queue(data, read_links_txt(txt_path), source='links.txt', at_top=False)
+
+
+def sync_queue_and_txt(data, txt_path=None):
+    """Bidirectional sync: first pull any new URLs from the txt file into the
+    queue, then write the full queue back to the txt file. Call this after
+    EVERY queue mutation."""
+    sync_txt_into_queue(data, txt_path)
+    write_txt_mirror(data, txt_path)
 
 
 # ── queue helpers ─────────────────────────────────────────────────────
@@ -280,3 +330,77 @@ def dedup(data):
     b_removed = len(data['bookmarks']) - len(new_b)
     data['bookmarks'] = new_b
     return q_removed, b_removed
+
+
+# ── category helpers (used by the categorizer panel + CLI) ─────────────
+#
+# The ``categories`` section maps a folder name to ``{stars, tags, displayName}``.
+# ``stars`` is the user's 0..CATEGORY_MAX_STARS rating: 0 means "don't create this
+# folder / never a move target", >=1 means the folder is created and used as an
+# auto-categorize destination (a higher rating also wins ties when a filename
+# matches more than one category). ``tags`` are extra match terms beyond the name.
+
+def get_categories(data):
+    """Return the category map {name: {stars, tags, displayName}} (never None)."""
+    cats = data.get('categories')
+    return cats if isinstance(cats, dict) else {}
+
+
+def set_category(data, name, stars=None, tags=None, display_name=None):
+    """Create or update a single category; only the provided fields change.
+    Returns the resulting entry (or None for a blank name)."""
+    name = (name or '').strip()
+    if not name:
+        return None
+    cats = data.setdefault('categories', {})
+    entry = cats.get(name)
+    if not isinstance(entry, dict):
+        entry = {}
+    if stars is not None:
+        entry['stars'] = max(0, min(int(stars), CATEGORY_MAX_STARS))
+    if tags is not None:
+        entry['tags'] = [str(t).strip() for t in tags if str(t).strip()]
+    if display_name is not None:
+        entry['displayName'] = display_name or name
+    entry.setdefault('stars', 0)
+    entry.setdefault('tags', [])
+    entry.setdefault('displayName', name)
+    cats[name] = entry
+    return entry
+
+
+def remove_category(data, name):
+    """Drop a category entirely. Returns True if it existed."""
+    return data.setdefault('categories', {}).pop(name, None) is not None
+
+
+def cycle_category_stars(data, name):
+    """Advance a category's star rating 0→1→…→max→0 and return the new value."""
+    entry = get_categories(data).get(name) or {}
+    nxt = (int(entry.get('stars', 0)) + 1) % (CATEGORY_MAX_STARS + 1)
+    set_category(data, name, stars=nxt)
+    return nxt
+
+
+def starred_categories(data):
+    """Categories whose folder should be created (stars >= 1), name → entry."""
+    return {n: e for n, e in get_categories(data).items()
+            if isinstance(e, dict) and int(e.get('stars', 0)) >= 1}
+
+
+def seed_categories(data, presets):
+    """Merge a {name: {displayName, tags}} preset map into the category section
+    without touching the stars of categories that already exist. Returns the
+    number of new categories added."""
+    cats = data.setdefault('categories', {})
+    added = 0
+    for name, info in (presets or {}).items():
+        if not name or name in cats or not isinstance(info, dict):
+            continue
+        cats[name] = {
+            'stars': 0,
+            'tags': [str(t) for t in info.get('tags', []) if str(t).strip()],
+            'displayName': info.get('displayName') or name,
+        }
+        added += 1
+    return added
