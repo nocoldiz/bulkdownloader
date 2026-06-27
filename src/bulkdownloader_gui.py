@@ -691,26 +691,37 @@ _JS_FOLLOWING = r"""
 })()
 """
 
-# %s is the CSS selector picking which tweets count as "has a video".
+# %s is the CSS selector picking which tweets/grid items count as "has a video".
 _JS_VIDEO_TMPL = r"""
 (() => {
   const out = [];
+  
+  // 1. Standard Timeline Tweets
   document.querySelectorAll('article[data-testid="tweet"]').forEach(a => {
     if (!a.querySelector('%s')) return;
     const link = a.querySelector('a[href*="/status/"]:has(time)')
               || a.querySelector('a[href*="/status/"]');
     if (link) out.push(link.href.split('?')[0].replace(/\/(photo|video|analytics)\/\d+$/, ''));
   });
+
+  // 2. New Media Tab Grid Items
+  // Grid thumbnails lack the 'article' tag. We check for video URLs directly or the video DOM selectors.
+  document.querySelectorAll('a[href*="/status/"]').forEach(a => {
+    if (a.href.match(/\/video\/\d+/) || a.querySelector('%s')) {
+      out.push(a.href.split('?')[0].replace(/\/(photo|video|analytics)\/\d+$/, ''));
+    }
+  });
+
   return Array.from(new Set(out));
 })()
 """
-
 
 def _js_video(sensitive=True):
     sel = '[data-testid="videoComponent"], [data-testid="videoPlayer"], video'
     if sensitive:
         sel += ', [data-testid="previewInterstitial"]'
-    return _JS_VIDEO_TMPL % sel
+    # Pass 'sel' twice to fulfill both %s placeholders in the updated template
+    return _JS_VIDEO_TMPL % (sel, sel)
 
 
 # ════════════════════════════════════════════════════════════════════
@@ -4057,6 +4068,13 @@ class DownloadManager(tk.Tk):
                 self._xpost('x_log', f'[{i + 1}/{len(handles)}] @{h} media…')
                 try:
                     page.goto(f'https://x.com/{h}/media', wait_until='domcontentloaded', timeout=60000)
+                    # Extra waits + selector wait for X.com /media pages (they are very dynamic)
+                    page.wait_for_load_state("domcontentloaded")
+                    try:
+                        page.wait_for_selector('article[data-testid="tweet"]', timeout=8000)
+                    except Exception:
+                        pass
+                    page.wait_for_timeout(2200)
                     collected.extend(self._x_scroll_collect(page, js, cmd.get('cap', 300), f'@{h}'))
                 except Exception as e:
                     self._xpost('x_log', f'@{h} failed: {e}')
@@ -4172,9 +4190,21 @@ class DownloadManager(tk.Tk):
         stale = 0
         last_y = -1
         loops = 0
-        while len(seen) < cap and stale < 12 and loops < 500:
+        # Initial wait so the first evaluate has content
+        try:
+            page.wait_for_selector('article[data-testid="tweet"]', timeout=6000)
+        except Exception:
+            pass
+        page.wait_for_timeout(1500)
+
+        while len(seen) < cap and stale < 15 and loops < 600:
             loops += 1
             try:
+                # Re-wait before each evaluation (X.com lazy-loads heavily)
+                try:
+                    page.wait_for_selector('article[data-testid="tweet"]', timeout=4000)
+                except Exception:
+                    pass
                 found = page.evaluate(js) or []
             except Exception:
                 break
@@ -4187,10 +4217,10 @@ class DownloadManager(tk.Tk):
                         break
             self._xpost('x_log', f'  {label}: {len(seen)} found…')
             try:
-                page.evaluate('window.scrollBy(0, Math.round(window.innerHeight * 0.85))')
+                page.evaluate('window.scrollBy(0, Math.round(window.innerHeight * 1.1))')
             except Exception:
                 pass
-            page.wait_for_timeout(1200)
+            page.wait_for_timeout(1400)
             try:
                 y = page.evaluate('Math.round(window.scrollY)')
             except Exception:
