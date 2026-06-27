@@ -1,105 +1,64 @@
 # -*- mode: python ; coding: utf-8 -*-
 import sys
-import shutil
-from PyInstaller.utils.hooks import collect_all
 
-# curl_cffi ships a compiled libcurl + cacert bundle, and yt_dlp lazy-loads its
-# extractors as submodules. PyInstaller misses these by default, producing an
-# app that builds fine but crashes at launch with ImportError. Collect them all.
-_dep_datas, _dep_binaries, _dep_hidden = [], [], []
-for _pkg in ('curl_cffi', 'yt_dlp'):
-    _d, _b, _h = collect_all(_pkg)
-    _dep_datas += _d
-    _dep_binaries += _b
-    _dep_hidden += _h
+block_cipher = None
 
-# IMPORTANT: PyInstaller does NOT cross-compile. A macOS .app is only produced
-# when this spec is built ON macOS (run ./build.sh there). Building on Windows
-# yields BulkDownloaderGUI.exe; on Linux, a Linux ELF binary.
-
-# UPX corrupts/breaks binaries on macOS (dylib loading + codesigning) and is
-# usually absent on macOS/Linux, which would abort the build. Only enable it on
-# non-Darwin platforms when the upx executable is actually available.
-IS_MAC = sys.platform == 'darwin'
-USE_UPX = not IS_MAC and shutil.which('upx') is not None
+# Define your main entry point script here
+app_name = 'BulkDownloaderGUI'
+script_path = 'main.py'  # REPLACE with your actual main python filename
 
 a = Analysis(
-    ['src/bulkdownloader_gui.py'],
-    pathex=['src'],
-    binaries=_dep_binaries,
-    datas=[('src/bulkdownloader.py', '.'), ('src/site_search.py', '.'),
-           ('assets/websites.json', '.'), ('assets/categories.json', '.')] + _dep_datas,
-    hiddenimports=_dep_hidden,
+    [script_path],
+    pathex=[],
+    binaries=[],
+    datas=[], # Add your assets (icons, images) here as tuples: ('source', 'destination')
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
     noarchive=False,
-    optimize=0,
 )
-pyz = PYZ(a.pure)
 
-if IS_MAC:
-    # onedir + COLLECT + BUNDLE is the robust recipe for a real, launchable .app
-    # (onefile-in-.app extracts to /tmp on every launch and trips Gatekeeper more
-    # often). COLLECT produces dist/BulkDownloaderGUI/, BUNDLE wraps it as the .app.
-    exe = EXE(
-        pyz,
-        a.scripts,
-        [],
-        exclude_binaries=True,
-        name='BulkDownloaderGUI',
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=False,
-        upx=False,
-        console=False,
-        disable_windowed_traceback=False,
-        argv_emulation=True,
-        target_arch=None,
-        codesign_identity=None,
-        entitlements_file=None,
-    )
-    coll = COLLECT(
-        exe,
-        a.binaries,
-        a.datas,
-        strip=False,
-        upx=False,
-        upx_exclude=[],
-        name='BulkDownloaderGUI',
-    )
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    [],
+    exclude_binaries=True,
+    name=app_name,
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    console=False, # Set to True if you want to see terminal output during debugging
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name=app_name,
+)
+
+# This block is CRITICAL for macOS .app generation
+if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='BulkDownloaderGUI.app',
-        bundle_identifier='com.aphroarchive.bulkdownloader',
-        info_plist={
-            'CFBundleName': 'BulkDownloaderGUI',
-            'CFBundleDisplayName': 'AphroArchive Downloader',
-            'CFBundleShortVersionString': '1.0.0',
-            'NSHighResolutionCapable': True,
-            'LSApplicationCategoryType': 'public.app-category.utilities',
-            'LSMinimumSystemVersion': '10.13.0',
-        },
-    )
-else:
-    # Windows / Linux: single self-contained executable.
-    exe = EXE(
-        pyz,
-        a.scripts,
-        a.binaries,
-        a.datas,
-        [],
-        name='BulkDownloaderGUI',
-        debug=False,
-        bootloader_ignore_signals=False,
-        strip=False,
-        upx=USE_UPX,
-        upx_exclude=[],
-        runtime_tmpdir=None,
-        console=False,
-        disable_windowed_traceback=False,
-        target_arch=None,
-        codesign_identity=None,
-        entitlements_file=None,
+        icon=None, # Path to your .icns file
+        bundle_identifier='com.yourname.bulkdownloader',
     )

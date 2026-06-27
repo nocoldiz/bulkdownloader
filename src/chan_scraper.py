@@ -49,6 +49,8 @@ _THREAD_RE = re.compile(r'/([^/?#]+)/(?:thread|res)/(\d+)', re.I)
 # href/src/data-src/poster on any tag — the broadest net for media links.
 _ATTR_RE = re.compile(r'(?:href|src|data-src|data-original|poster|content)\s*=\s*["\']([^"\']+)["\']', re.I)
 _TITLE_RE = re.compile(r'<title[^>]*>(.*?)</title>', re.I | re.S)
+# A bare URL pasted into post text — used to scrape links posted in comments.
+_LINK_RE = re.compile(r'https?://[^\s"\'<>()\[\]{}]+', re.I)
 
 
 # ── HTTP helpers ───────────────────────────────────────────────────────────────
@@ -209,6 +211,21 @@ def _media_ext(url):
     return os.path.splitext(path)[1]
 
 
+def _media_links_in_text(text):
+    """Yield direct-media URLs pasted as plain text in a post (e.g. an external
+    file-host link dropped in a comment). Trailing punctuation and stray HTML
+    entities left over from comment markup are trimmed before the ext check."""
+    if not isinstance(text, str) or 'http' not in text:
+        return
+    for m in _LINK_RE.finditer(text):
+        u = m.group(0)
+        for ent in ('&quot;', '&gt;', '&lt;', '&amp;', '&#'):  # cut leftover HTML entities
+            u = u.split(ent)[0]
+        u = u.rstrip('.,;:!?)\'">')                            # then trailing prose punctuation
+        if _media_ext(u) in MEDIA_EXTS:
+            yield u
+
+
 def scrape_media(url, want_images=True, want_videos=True):
     """Return (title, [media_url, ...]) for the imageboard page at *url*, limited
     to the requested media kinds.
@@ -297,6 +314,8 @@ def _walk_json_media(node, board, root):
     elif isinstance(node, list):
         for item in node:
             yield from _walk_json_media(item, board, root)
+    elif isinstance(node, str):                                   # links posted in comments
+        yield from _media_links_in_text(node)
 
 
 def _json_title(data, board, thread):
@@ -339,6 +358,7 @@ def _scrape_generic(url):
                 or name.startswith(('t_', 'thumb'))):     #   common thumb prefixes
             continue
         urls.append(absu)
+    urls.extend(_media_links_in_text(html))               # media links posted as text
     return title, _dedup(urls)
 
 

@@ -1638,6 +1638,20 @@ class DownloadManager(tk.Tk):
         url = self.items[iid]['url']
         self._console_log(f'▶ start   {url}')
         self.status_var.set(f'⬇ Downloading {len(self.active)} item(s)…')
+
+        # Always refresh cookie info right before launching a worker.
+        # This fixes the case where you log in / save cookies *after* pressing Start.
+        if self._env is None:
+            self._env = self._build_env()
+        browser = self._config.get('cookies_from_browser', '')
+        if browser:
+            self._env['BULK_COOKIES_FROM_BROWSER'] = browser
+        elif COOKIES_FILE.exists():
+            self._env['BULK_COOKIES_FILE'] = str(COOKIES_FILE)
+        else:
+            self._env.pop('BULK_COOKIES_FILE', None)
+            self._env.pop('BULK_COOKIES_FROM_BROWSER', None)
+
         threading.Thread(target=self._download_worker, args=(iid, url), daemon=True).start()
 
     def _download_worker(self, iid, url):
@@ -2863,6 +2877,17 @@ class DownloadManager(tk.Tk):
         h = h.lstrip('@').strip().strip('/')
         return h if re.fullmatch(r'[A-Za-z0-9_]{1,15}', h) else ''
 
+    def _parse_handles(self, text):
+        """Parse comma/space separated @handles or profile URLs into clean list (deduped, order preserved)."""
+        handles = []
+        seen = set()
+        for part in re.split(r'[\s,;/]+', (text or '').strip()):
+            h = self._clean_handle(part)
+            if h and h.lower() not in seen:
+                seen.add(h.lower())
+                handles.append(h)
+        return handles
+
     def _xs_mon_add(self):
         added = []
         for part in re.split(r'[\s,]+', self.xs_mon_entry_var.get()):
@@ -3524,12 +3549,12 @@ class DownloadManager(tk.Tk):
 
         hrow = ttk.Frame(sp)
         hrow.pack(fill='x', padx=8, pady=(0, 8))
-        ttk.Label(hrow, text='Profile @handle:').pack(side='left')
+        ttk.Label(hrow, text='Profile @handle(s) — comma/space separated:').pack(side='left')
         self.x_handle_var = tk.StringVar()
-        e = ttk.Entry(hrow, textvariable=self.x_handle_var, width=22)
+        e = ttk.Entry(hrow, textvariable=self.x_handle_var, width=40)
         e.pack(side='left', padx=6)
-        e.bind('<Return>', lambda ev: self._x_scrape('handle'))
-        b_prof = ttk.Button(hrow, text='👤 Scrape this profile’s media', command=lambda: self._x_scrape('handle'))
+        e.bind('<Return>', lambda ev: self._x_scrape_profiles())
+        b_prof = ttk.Button(hrow, text='👤 Scrape profile(s) media', command=self._x_scrape_profiles)
         b_prof.pack(side='left')
         ttk.Label(hrow, text='Per followed profile:').pack(side='left', padx=(16, 4))
         self.x_per_var = tk.IntVar(value=int(self._config.get('x_per_profile', 40) or 40))
@@ -3732,6 +3757,26 @@ class DownloadManager(tk.Tk):
                 return
             cmd['handle'] = h
         self.x_status_var.set(f'Scraping {kind}…')
+        self._x_send(cmd)
+
+    def _x_scrape_profiles(self):
+        """Full profile scraper: accept multiple @handles (comma/space separated),
+        scrape each /media tab for videos, save links to bookmark DB (and optionally
+        queue them for download with deduping)."""
+        if not self._x_require_engine():
+            return
+        self._save_config()
+        raw = self.x_handle_var.get().strip()
+        handles = self._parse_handles(raw)
+        if not handles:
+            messagebox.showinfo('Handles needed',
+                                'Enter one or more @handles (comma or space separated) to scrape their media.')
+            return
+        cmd = {'op': 'profiles', 'handles': handles,
+               'cap': max(10, int(self.x_max_var.get() or 300)),
+               'at_top': bool(self.x_at_top_var.get()),
+               'sensitive': bool(self.x_sensitive_var.get())}
+        self.x_status_var.set(f'Scraping media from {len(handles)} profile(s)…')
         self._x_send(cmd)
 
     def _x_scrape_page(self):
@@ -4002,6 +4047,25 @@ class DownloadManager(tk.Tk):
             self._x_export_cookies(context)
             return
 
+        if op == 'profiles':
+            handles = cmd.get('handles') or []
+            if not handles:
+                return
+            js = _js_video(cmd.get('sensitive', True))
+            collected = []
+            for i, h in enumerate(handles):
+                self._xpost('x_log', f'[{i + 1}/{len(handles)}] @{h} media…')
+                try:
+                    page.goto(f'https://x.com/{h}/media', wait_until='domcontentloaded', timeout=60000)
+                    collected.extend(self._x_scroll_collect(page, js, cmd.get('cap', 300), f'@{h}'))
+                except Exception as e:
+                    self._xpost('x_log', f'@{h} failed: {e}')
+            self._xpost('x_result', {'urls': list(dict.fromkeys(collected)),
+                                     'at_top': cmd.get('at_top', False),
+                                     'label': f'{len(handles)} profile(s)'})
+            self._x_export_cookies(context)
+            return
+
         # likes / bookmarks / handle media
         cap = cmd.get('cap', 300)
         js = _js_video(cmd.get('sensitive', True))
@@ -4150,10 +4214,14 @@ class DownloadManager(tk.Tk):
             dom = c.get('domain', '') or ''
             if 'x.com' not in dom and 'twitter.com' not in dom:
                 continue
+            # Force leading dot so cookies apply to all X subdomains (api.x.com, video.twimg.com, etc.)
+            # This is the #1 reason "logged in but downloads still fail".
+            if dom and not dom.startswith('.'):
+                dom = '.' + dom.lstrip('.')
             name = c.get('name', '')
             if not name:
                 continue
-            flag = 'TRUE' if dom.startswith('.') else 'FALSE'
+            flag = 'TRUE'
             path = c.get('path', '/') or '/'
             secure = 'TRUE' if c.get('secure') else 'FALSE'
             try:
